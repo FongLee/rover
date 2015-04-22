@@ -64,11 +64,11 @@ test: $(OBJS)
 	$(CC) $(CFLAGS) $(INCS) $(DEFS) $< -o $@
 
 $(MATRIXDIR)/meschach.a:
-	cd $(MATRIXDIR) && make
+	cd $(MATRIXDIR) && make CC=arm-linux-gcc
 
 $(NMEADIR)/lib/libnmea.a:
 	cd $(NMEADIR) && make
 
 clean:
 	rm -f $(OBJS)
-	#cd $(MATRIXDIR) && make clean
+	cd $(MATRIXDIR) && make clean

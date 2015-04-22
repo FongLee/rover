@@ -1,162 +1,170 @@
-#include <stdio.h>
+#include <malloc.h>
+
 #include "kalman.h"
-#include "matrix.h"
-#include "matrix2.h"
+#include "matrix2.h" //m_inverse
 #include "matrix_kalman.h"
 
-kalman_filter alloc_filter(int state_dimension, int observation_dimension)
+/**
+ * alloc a kalman_filter
+ * @param  f                 [description]
+ * @param  state_dimension   [description]
+ * @param  measure_dimension [description]
+ * @param  input_dimension   [description]
+ * @return                   [description]
+ */
+kalman_t * alloc_kalman_filter(kalman_t **f, int state_dimension, int measure_dimension, int input_dimension)
 {
-	kalman_filter f;
-	f.timestep = 0;
-	f.state_dimension = state_dimension;
-	f.observation_dimension = observation_dimension;
-	//F(k)
-	f.state_transition = m_get(state_dimension, state_dimension);
-	//B(K)
-	f.control_input_model = m_get(state_dimension, observation_dimension);
-	//u(k)
-	f.control_input = m_get(observation_dimension, 1);
+	*f = (kalman_t *)malloc(sizeof(kalman_t));
+	if (*f == NULL)
+	{
+		return NULL;
+	}
+
+	(*f)->state_dimension = state_dimension;
+	(*f)->measure_dimension = measure_dimension;
+	(*f)->input_dimension = input_dimension;
+	//x(k)
+	(*f)->state_estimate = m_get(state_dimension, 1);
+	//A
+	(*f)->state_transition = m_get(state_dimension, state_dimension);
+	//B
+	(*f)->control_input_model = m_get(state_dimension, input_dimension);
+	//u(k-1)
+	(*f)->control_input = m_get(input_dimension, 1);
+	//Q
+	(*f)->process_noise_covariance = m_get(state_dimension, state_dimension);
 	//H(k)
-	f.observation_model = m_get(observation_dimension, state_dimension);
-	//Q(k)
-	f.process_noise_covariance = m_get(state_dimension, state_dimension);
-	//R(k)
-	f.observation_noise_covariance = m_get(observation_dimension, observation_dimension);
+	(*f)->measure_model = m_get(measure_dimension, state_dimension);
+	//R
+	(*f)->measure_noise_covariance = m_get(measure_dimension, measure_dimension);
+	//P(k)
+	(*f)->covariance_estimate = m_get(state_dimension, state_dimension);
+	//x(k|k-1)
+	(*f)->state_predict = m_get(state_dimension, 1);
+	//P(k|k-1)
+	(*f)->covariance_predict = m_get(state_dimension, state_dimension);
 	//z(k)
-	f.observation = m_get(observation_dimension, 1);
-	//x(k+1|k)
-	f.predicted_state = m_get(state_dimension, 1);
-	//P(k+1|k)
-	f.predicted_estimate_covariance = m_get(state_dimension, state_dimension);
+	(*f)->measure = m_get(measure_dimension, 1);
 	//y(k)
-	f.innovation = m_get(observation_dimension, 1);
+	(*f)->innovation = m_get(measure_dimension, 1);
 	//S(k)
-	f.innovation_covariance = m_get(observation_dimension, observation_dimension);
+	(*f)->innovation_covariance = m_get(measure_dimension, measure_dimension);
 	//S(k)^-1
-	f.inverse_innovation_covariance = m_get(observation_dimension, observation_dimension);
+	(*f)->inverse_innovation_covariance = m_get(measure_dimension, measure_dimension);
 	//K(k)
-	f.optimal_gain = m_get(state_dimension, state_dimension);
-	//x(k+1|k+1)
-	f.state_estimate = m_get(state_dimension, 1);
-	//p(k+1|k+1)
-	f.estimate_covariance = m_get(state_dimension, state_dimension);
+	(*f)->k_gain = m_get(state_dimension, measure_dimension);
+	//state_dimension * 1
+	(*f)->tmp1_state_dimension = m_get(state_dimension, 1);
+	(*f)->tmp2_state_dimension = m_get(state_dimension, 1);
+	//measure_dimension * 1
+	(*f)->tmp_measure_dimension = m_get(measure_dimension, 1);
+	//measure_dimension * state_dimension
+	(*f)->tmp_measure_state = m_get(measure_dimension, state_dimension);
+	//state_dimension * state_dimension
+	(*f)->tmp_state_state = m_get(state_dimension, state_dimension);
 	
-	f.vertical_scratch = m_get(state_dimension, observation_dimension);
-	f.small_square_scratch = m_get(observation_dimension, observation_dimension);
-	f.big_square_scratch = m_get(state_dimension, state_dimension);
-#ifdef KALMAN_DEBUG
-	fprintf(stdout, "alloc_filter succeed!\n");
-#endif 
-	return f;
-}
-
-void free_filter(kalman_filter f)
-{
-	m_free(f.state_transition);
-	m_free(f.control_input_model);
-	m_free(f.control_input);
-	m_free(f.observation_model);
-	m_free(f.process_noise_covariance);
-	m_free(f.observation_noise_covariance);
-	m_free(f.observation);
-	m_free(f.predicted_state);
-	m_free(f.predicted_estimate_covariance);
-	m_free(f.innovation);
-	m_free(f.innovation_covariance);
-	m_free(f.inverse_innovation_covariance);
-	m_free(f.optimal_gain);
-	m_free(f.state_estimate);
-	m_free(f.estimate_covariance);
-
-	m_free(f.vertical_scratch);
-	m_free(f.small_square_scratch);
-	m_free(f.big_square_scratch);
+	return *f;
 
 }
 
-void predict(kalman_filter f)
+/**
+ * free a kalman_filter
+ * @param f [description]
+ */
+void free_kalman_filter(kalman_t **f)
 {
-	f.timestep++;
-#ifdef KALMAN_DEBUG
-	fprintf(stdout, "timestep succeed!\n");
-#endif 
-	static MAT *predicted_state_tmp;
-	predicted_state_tmp = m_resize(predicted_state_tmp, f.state_dimension, f.observation_dimension);
-
-	//predict the state
-	//x(k+1|k) = F(k) * x(k) + B(k) * u(k) 
-	m_mlt(f.control_input_model, f.control_input, predicted_state_tmp);
-#ifdef KALMAN_DEBUG
-		fprintf(stdout, "control_input_model is :\n");
-		m_output(f.control_input_model);
-		fprintf(stdout, "control_input is :\n");
-		m_output(f.control_input);
-#endif
-
-	m_mlt(f.state_transition, f.state_estimate, f.predicted_state);
-#ifdef KALMAN_DEBUG
-	fprintf(stdout, "predicted_state_tmp is :\n");
-	m_output(predicted_state_tmp);
-	fprintf(stdout, "predicted_state is :\n");
-	m_output(f.predicted_state);
-
-#endif 
-
-	m_add(f.predicted_state, predicted_state_tmp, f.predicted_state);
-
-#ifdef KALMAN_DEBUG
-	fprintf(stdout, "predicted_state is :\n");
-	m_output(f.predicted_state);
-#endif 
-
-	//predict the state estimate covariance
-	//P(k+1|k) = F(k) * P(k|k) F(k)^T + Q(k)
-	m_mlt(f.state_transition, f.estimate_covariance, f.big_square_scratch);
-	m_mlt_by_trans(f.big_square_scratch, f.state_transition, f.predicted_estimate_covariance);
-	m_add(f.predicted_estimate_covariance, f.process_noise_covariance, f.predicted_estimate_covariance);
-#ifdef KALMAN_DEBUG
-	fprintf(stdout, "predicted_estimate_covariance is :\n");
-	m_output(f.predicted_estimate_covariance);
-#endif
-
-#ifdef KALMAN_DEBUG
-	fprintf(stdout, "predict succeed!\n");
-#endif 
-} 
-
-void estimate(kalman_filter f)
-{
-	//calculate innovation
-	//y(k+1)^~ = y(k+1) - H(K+1) * x(k+1|k) 
-	m_mlt(f.observation_model, f.predicted_state, f.innovation);
-	m_sub(f.observation, f.innovation , f.innovation);
-	//calculate innovation covariance
-	//S(k+1) = H(k+1|k) * P(k+1|k) * H(k+1|k)^T + R(k+1)
-	m_mlt_by_trans(f.predicted_estimate_covariance, f.observation_model, f.vertical_scratch);
-	m_mlt(f.observation_model, f.vertical_scratch, f.innovation_covariance);
-	m_add(f.innovation_covariance, f.observation_noise_covariance, f.innovation_covariance);
-	//calculate S(k+1)^-1
-	m_inverse(f.innovation_covariance, f.inverse_innovation_covariance);
-	//calculate the kalman gain
-	//K(k+1) = P(k+1|k) * H(k+1)^T *S(k+1)
-	m_mlt_by_trans(f.vertical_scratch, f.inverse_innovation_covariance, f.optimal_gain);
-	//estimate tht state
-	//x(k+1|k+1) = x(k+1|k) + y(k+1)^~
-	m_mlt(f.optimal_gain, f.innovation, f.state_estimate);
-	m_add(f.state_estimate, f.predicted_state, f.state_estimate);
-	//estimate the state covariance
-	//P(k+1|k+1) = P(k+1|k) - K(k+1) * H(k+1) * P(k+1|k)
-	m_mlt(f.optimal_gain, f.observation_model, f.big_square_scratch);
-	m_mlt(f.big_square_scratch, f.predicted_estimate_covariance, f.estimate_covariance);
-	m_sub(f.predicted_estimate_covariance, f.estimate_covariance, f.estimate_covariance);
-#ifdef KALMAN_DEBUG
-	fprintf(stdout, "estimate succeed!\n");
-#endif 
+	m_free((*f)->state_estimate);
+	m_free((*f)->state_transition);
+	m_free((*f)->control_input_model);
+	m_free((*f)->control_input);
+	m_free((*f)->process_noise_covariance);
+	m_free((*f)->measure);
+	m_free((*f)->measure_model);
+	m_free((*f)->measure_noise_covariance);
+	m_free((*f)->covariance_estimate);
+	m_free((*f)->state_predict);
+	m_free((*f)->covariance_predict);
+	m_free((*f)->innovation);
+	m_free((*f)->innovation_covariance);
+	m_free((*f)->inverse_innovation_covariance);
+	m_free((*f)->k_gain);
+	m_free((*f)->tmp1_state_dimension);
+	m_free((*f)->tmp2_state_dimension);
+	m_free((*f)->tmp_measure_dimension);
+	m_free((*f)->tmp_measure_state);
+	m_free((*f)->tmp_state_state);
+	free(*f);
 }
 
-void update(kalman_filter f)
+/**
+ * prediction in the kalman filter
+ * @param  f [description]
+ * @return   [description]
+ */
+int predict(kalman_t *f)
 {
-	predict(f);
-	estimate(f);
+	//x(k|k-1) = A * x(k-1) + B * u(k-1)
+	
+	//tmp1 = A * x(k-1)
+	m_mlt(f->state_transition, f->state_estimate, f->tmp1_state_dimension);
+	//tmp2 = B * u(k-1)
+	m_mlt(f->control_input_model, f->control_input, f->tmp2_state_dimension);
+	//x(k|k-1) = tmp1 + tmp2
+	m_add(f->tmp1_state_dimension, f->tmp2_state_dimension, f->state_predict);
+
+	//P(k|k-1) = A * P(k-1) * A^T + Q
+	//tmp1 = A * P(k-1)
+	m_mlt(f->state_transition, f->covariance_estimate, f->tmp1_state_dimension);
+	//tmp2 = tmp1 * A^T
+	mmtr_mlt(f->tmp1_state_dimension, f->state_transition, f->tmp2_state_dimension);
+	//P(k|k-1) = tmp2 + Q
+	m_add(f->tmp2_state_dimension, f->process_noise_covariance, f->covariance_predict); 
+	return 0;
 }
 
+/**
+ * update in kalman filter
+ * @param  f [description]
+ * @return   [description]
+ */
+int update(kalman_t *f)
+{
+	//y(k) = z(k) - H * x(k|k-1)
+	
+	//tmp = H * x(k|k-1)
+	m_mlt(f->measure_model, f->state_predict, f->tmp_measure_dimension);
+	//y(k) = z(k) - tmp
+	m_sub(f->measure, f->tmp_measure_dimension, f->innovation);
+
+	//S(k) = H * P(k|k-1) * H^T+ R
+	//tmp = H * P(k|k-1)
+	m_mlt(f->measure_model, f->covariance_predict, f->tmp_measure_state);
+	//S(k) = tmp * H^T 
+	mmtr_mlt(f->tmp_measure_state, f->measure_model, f->innovation_covariance);
+	//S(k) = S(k) + R
+	m_add(f->innovation_covariance, f->measure_noise_covariance, f->innovation_covariance);
+	//S(k)^-1
+	m_inverse(f->innovation_covariance, f->inverse_innovation_covariance);
+
+	//K(k) = P(k|k-1) * H^T * S(k)^-1
+	//tmp = P(k|k-1) * H^T
+	mmtr_mlt(f->covariance_predict, f->measure_model, f->tmp_state_state);
+	//K(k) = tmp * S(k)^-1
+	m_mlt(f->tmp_state_state, f->inverse_innovation_covariance,f->k_gain);
+
+	//x(k) = x(k|k-1) + K(k) * y(k)
+	//tmp = k(k) * y(k)
+	m_mlt(f->k_gain, f->innovation, f->tmp1_state_dimension);
+	//x(k) = x(k|k-1) + tmp
+	m_add(f->state_predict, f->tmp1_state_dimension, f->state_estimate);
+
+	//P(k) = P(k|k-1) - K(k) * H * P(k|k-1)
+	//tmp = K(k) * H
+	m_mlt(f->k_gain, f->measure_model, f->tmp_state_state);
+	//P(k) = tmp * P(k|k-1)
+	m_mlt(f->tmp_state_state, f->covariance_predict, f->covariance_estimate);
+	//P(k) = P(k|k-1) - P(k)
+	m_sub(f->covariance_predict, f->covariance_estimate, f->covariance_estimate);
+
+	return 0;
+}

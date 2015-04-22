@@ -43,7 +43,7 @@ caldata_t accel_cal_data;
 int use_mag_cal;
 caldata_t mag_cal_data;
 
-kalman_filter f_yaw;
+kalman_t *f_yaw;
 
 #define DELT_T 			0.02
 
@@ -168,30 +168,30 @@ int mpu9150_init(int i2c_bus, int sample_rate, int mix_factor)
 
 	printf(".");
 	fflush(stdout);
-	f_yaw = alloc_filter(2, 1);
+	alloc_kalman_filter(&f_yaw, 2, 1, 1);
 
-	set_matrix(f_yaw.state_transition,
+	set_matrix(f_yaw->state_transition,
 				1.0,  	-DELT_T,
 				0.0, 		1.0);
-	set_matrix(f_yaw.control_input_model, (double)DELT_T, 0.0);
-	//set_matrix(f_yaw.control_input_model, 0.01, 0.0);
-	set_matrix(f_yaw.observation_model, 1.0, 0.0);
+	set_matrix(f_yaw->control_input_model, (double)DELT_T, 0.0);
+	//set_matrix(f_yaw->control_input_model, 0.01, 0.0);
+	set_matrix(f_yaw->measure_model, 1.0, 0.0);
 
-//	set_matrix(f_yaw.process_noise_covariance,
+//	set_matrix(f_yaw->process_noise_covariance,
 //				0.001, 	0.0,
 //				0.0, 		0.003);
-	//set_matrix(f_yaw.process_noise_covariance,
+	//set_matrix(f_yaw->process_noise_covariance,
 	//			0.00001, 	0.0,
 	//			0.0, 		0.00003);
-	set_matrix(f_yaw.process_noise_covariance,
+	set_matrix(f_yaw->process_noise_covariance,
 	 			1.0, 	0.0,
 	 			0.0, 		1.0);
-	//set_matrix(f_yaw.observation_noise_covariance, 0.2);
-	set_matrix(f_yaw.observation_noise_covariance, 5.0);
+	//set_matrix(f_yaw->measure_noise_covariance, 0.2);
+	set_matrix(f_yaw->measure_noise_covariance, 5.0);
 	float deviation = 1000.0;
-	set_matrix(f_yaw.state_estimate, 0.0, 0.0);
-	m_ident(f_yaw.estimate_covariance);
-	sm_mlt(deviation * deviation, f_yaw.estimate_covariance, f_yaw.estimate_covariance);
+	set_matrix(f_yaw->state_estimate, 0.0, 0.0);
+	m_ident(f_yaw->covariance_estimate);
+	sm_mlt(deviation * deviation, f_yaw->covariance_estimate, f_yaw->covariance_estimate);
 
 	printf(" done\n\n");
 
@@ -200,7 +200,7 @@ int mpu9150_init(int i2c_bus, int sample_rate, int mix_factor)
 
 void mpu9150_exit()
 {
-	free_filter(f_yaw);
+	free_kalman_filter(&f_yaw);
 	// turn off the DMP on exit
 	if (mpu_set_dmp_state(0))
 		printf("mpu_set_dmp_state(0) failed\n");
@@ -565,31 +565,31 @@ int data_fusion_kalman(mpudata_t *mpu)
 	 	i = 0;
 	 	//mag_angle = mag_yaw / 5;
 		//mag_yaw = 0;
-		set_matrix(f_yaw.observation,  mag_angle);
-		//fprintf(stdout, "observation is : %f\n", (double) mag_angle * RAD_TO_DEG);
+		set_matrix(f_yaw->measure,  mag_angle);
+		//fprintf(stdout, "measure is : %f\n", (double) mag_angle * RAD_TO_DEG);
 
 #ifdef KALMAN_DEBUG
 	fprintf(stdout, "\n");
-	fprintf(stdout, "observation is : \n");
-	m_output(f_yaw.observation);
+	fprintf(stdout, "measure is : \n");
+	m_output(f_yaw->measure);
 #endif
 
-	set_matrix(f_yaw.control_input, (double)mpu->rawGyro[VEC3_Z] / 16.4 / 180 * PI);
+	set_matrix(f_yaw->control_input, (double)mpu->rawGyro[VEC3_Z] / 16.4 / 180 * PI);
 
 #ifdef KALMAN_DEBUG
 	fprintf(stdout, "\n");
 	fprintf(stdout, "control_input is \n");
-	m_output(f_yaw.control_input);
+	m_output(f_yaw->control_input);
 #endif
-
+	predict(f_yaw);
 	update(f_yaw);
 
 #ifdef KALMAN_DEBUG
-	fprintf(stdout, "estimate_covariance is :\n");
-	m_output(f_yaw.estimate_covariance);
+	fprintf(stdout, "covariance_estimate is :\n");
+	m_output(f_yaw->covariance_estimate);
 #endif
 
-	mpu->fusedEuler[VEC3_Z] = f_yaw.state_estimate->me[0][0];
+	mpu->fusedEuler[VEC3_Z] = f_yaw->state_estimate->me[0][0];
 
 	//}
 
