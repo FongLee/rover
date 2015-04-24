@@ -1257,7 +1257,7 @@ int dmp_set_interrupt_mode(unsigned char mode)
  *  @return     0 if successful.
  */
 int dmp_read_fifo(short *gyro, short *accel, long *quat,
-    unsigned long *timestamp, short *sensors, unsigned char *more)
+    uint64_t *timestamp, short *sensors, unsigned char *more)
 {
     unsigned char fifo_data[MAX_PACKET_LENGTH];
     unsigned char ii = 0;
@@ -1332,8 +1332,9 @@ int dmp_read_fifo(short *gyro, short *accel, long *quat,
      */
     if (dmp.feature_mask & (DMP_FEATURE_TAP | DMP_FEATURE_ANDROID_ORIENT))
         decode_gesture(fifo_data + ii);
-
-    get_ms(timestamp);
+	//get_ns() function is only useful
+    get_ns(timestamp);
+	*timestamp = *timestamp / 1e6;
     return 0;
 }
 

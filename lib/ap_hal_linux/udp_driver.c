@@ -74,7 +74,7 @@ void udp_close()
 	}
 }
 
-int udp_send(uint8_t *ch, uint16_t length)
+int udp_send(const uint8_t *ch, uint16_t length)
 {
 	int16_t bytes_send = 0;
 	bytes_send = sendto(sock_udp, ch, length, 0, (struct sockaddr *)&gc_addr,

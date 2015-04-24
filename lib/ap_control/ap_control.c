@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
+#include <unistd.h>
 
 #include "ap_control.h"
 

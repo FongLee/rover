@@ -76,8 +76,12 @@ void communication_imu_send()
 void communication_gps_send()
 {
 
-	mavlink_msg_gps_raw_int_send(MAVLINK_COMM_0, gps_timestamp* 1000, info.fix, info.lat*100000, info.lon*100000, info.elv * 1000,
+	// mavlink_msg_gps_raw_int_send(MAVLINK_COMM_0, gps_timestamp* 1000, info.fix, info.lat*100000, info.lon*100000, info.elv * 1000,
+	// 								info.HDOP * 100, info.VDOP * 100, info.speed / 3.6 * 100, info.direction * 100, info.satinfo.inview);
+
+	mavlink_msg_gps_raw_int_send(MAVLINK_COMM_0, gps_timestamp* 1000, info.fix, gps_loc.lat, gps_loc.lng, gps_loc.alt * 10,
 									info.HDOP * 100, info.VDOP * 100, info.speed / 3.6 * 100, info.direction * 100, info.satinfo.inview);
+
 }
 
 void handle_mavlink_message(mavlink_channel_t chan, mavlink_message_t *msg)
@@ -157,8 +161,8 @@ void handle_mavlink_message(mavlink_channel_t chan, mavlink_message_t *msg)
 			mavlink_msg_ping_decode(msg, &ping);
 			if (ping.target_system == 0 && ping.target_component == 0)
 			{
-				unsigned long r_timestamp;
-				get_us((uint32_t *)&r_timestamp);
+				uint64_t r_timestamp;
+				get_us(&r_timestamp);
 				mavlink_msg_ping_send(chan, ping.seq, msg->sysid, msg->compid, r_timestamp);
 			}
 		}
@@ -221,7 +225,7 @@ void communication_receive(void)
 
 }
 
-void mavlink_send_uart_bytes(mavlink_channel_t chan, uint8_t *ch, uint16_t length)
+void mavlink_send_uart_bytes(mavlink_channel_t chan, const uint8_t *ch, uint16_t length)
 {
 	int send_size = 0;
 	if (chan == MAVLINK_COMM_0)
@@ -237,3 +241,4 @@ void mavlink_send_uart_bytes(mavlink_channel_t chan, uint8_t *ch, uint16_t lengt
 #endif
 	}
 }
+

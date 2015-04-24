@@ -24,6 +24,8 @@
 #ifndef MPU9150_H
 #define MPU9150_H
 
+#include <stdint.h>
+
 #include "quaternion.h"
 
 #define MAG_SENSOR_RANGE 	4096
@@ -56,11 +58,11 @@ typedef struct {
 	short rawGyro[3];
 	short rawAccel[3];
 	long rawQuat[4];
-	unsigned long dmpTimestamp;
-
+	//unsigned long dmpTimestamp;
+	uint64_t dmpTimestamp;
 	short rawMag[3];
-	unsigned long magTimestamp;
-
+	//unsigned long magTimestamp;
+	uint64_t  magTimestamp;
 	//short calibratedAccel[3];
 	//short calibratedMag[3];
 	float calibratedAccel[3];

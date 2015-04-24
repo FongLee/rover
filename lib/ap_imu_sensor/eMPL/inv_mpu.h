@@ -21,6 +21,7 @@
 #ifndef _INV_MPU_H_
 #define _INV_MPU_H_
 
+#include <stdint.h>
 #define INV_X_GYRO      (0x40)
 #define INV_Y_GYRO      (0x20)
 #define INV_Z_GYRO      (0x10)
@@ -101,13 +102,13 @@ int mpu_set_sensors(unsigned char sensors);
 int mpu_set_accel_bias(const long *accel_bias);
 
 /* Data getter/setter APIs */
-int mpu_get_gyro_reg(short *data, unsigned long *timestamp);
-int mpu_get_accel_reg(short *data, unsigned long *timestamp);
-int mpu_get_compass_reg(short *data, unsigned long *timestamp);
-int mpu_get_temperature(long *data, unsigned long *timestamp);
+int mpu_get_gyro_reg(short *data, uint64_t *timestamp);
+int mpu_get_accel_reg(short *data, uint64_t *timestamp);
+int mpu_get_compass_reg(short *data, uint64_t *timestamp);
+int mpu_get_temperature(long *data, uint64_t *timestamp);
 
 int mpu_get_int_status(short *status);
-int mpu_read_fifo(short *gyro, short *accel, unsigned long *timestamp,
+int mpu_read_fifo(short *gyro, short *accel, uint64_t *timestamp,
     unsigned char *sensors, unsigned char *more);
 int mpu_read_fifo_stream(unsigned short length, unsigned char *data,
     unsigned char *more);

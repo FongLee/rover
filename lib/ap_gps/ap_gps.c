@@ -21,7 +21,7 @@ unsigned long last_good_update;
 unsigned long last_good_lat;
 unsigned long last_good_lon;
 VEC *last_good_vel;
-unsigned long gps_timestamp;
+uint64_t gps_timestamp;
 
 float radius_cm = 1000;
 float accel_max_cmss = 200;
@@ -152,7 +152,7 @@ void fill_3d_velocity(VEC *v)
 
 void check_position()
 {
-	unsigned long now ;
+	uint64_t now ;
 	struct location cur_loc;
 	float  sane_dt;
 	float distance_cm;

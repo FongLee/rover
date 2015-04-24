@@ -133,8 +133,8 @@ void *task_read_imu()
 				if (mpu9150_read(&mpu) == 0)
 				{
 					//print_fused_euler_angles(&mpu);
-					//fprintf(stdout, "read mpu9150 dmpTimestamp is %lu\n", mpu.dmpTimestamp);
-					//fprintf(stdout, "read mpu9150 magTimestamp is %lu\n", mpu.magTimestamp);
+					//fprintf(stdout, "read mpu9150 dmpTimestamp is %llu\n", (long long unsigned int)mpu.dmpTimestamp);
+					//fprintf(stdout, "read mpu9150 magTimestamp is %llu\n", (long long unsigned int)mpu.magTimestamp);
 					send_imu_now  = true;
 				}
 			}
@@ -143,6 +143,7 @@ void *task_read_imu()
 
 	}
 	mpu9150_exit();
+	return NULL;
 
 }
 

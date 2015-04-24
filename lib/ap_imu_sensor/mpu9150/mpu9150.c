@@ -3,7 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdint.h>
-
+#include <stdbool.h>
 #include <sys/time.h> //gettimeofday
 
 #include <sys/times.h> //times
@@ -23,6 +23,7 @@
 #include "scheduler.h"
 #include "ap_ahrs.h"
 
+int kalman_init(void);
 static int data_ready();
 static void calibrate_data(mpudata_t *mpu);
 static void tilt_compensate(quaternion_t magQ, quaternion_t unfusedQ);
@@ -32,7 +33,7 @@ static unsigned short inv_orientation_matrix_to_scalar(const signed char *mtx);
 static void run_self_test(void);
 
 int data_fusion_kalman(mpudata_t *mpu);
-
+int data_fusion_kalman2(mpudata_t *mpu);
 
 int debug_on;
 int yaw_mixing_factor;
@@ -45,9 +46,105 @@ caldata_t mag_cal_data;
 
 kalman_t *f_yaw;
 
-#define DELT_T 			0.02
+#define DELT_T 			0.01
+
+uint64_t last_mag_time;
+bool mag_time_init = false;
 
 
+/**
+ * kalman apply in yaw estimate
+ * @return  [description]
+ */
+int kalman_init(void)
+{
+	alloc_kalman_filter(&f_yaw, 2, 1, 1);
+
+	set_matrix(f_yaw->state_transition,
+				1.0,  	-DELT_T,
+				0.0, 		1.0);
+	set_matrix(f_yaw->control_input_model, (double)DELT_T, 0.0);
+	//set_matrix(f_yaw->control_input_model, 0.01, 0.0);
+	set_matrix(f_yaw->measure_model, 1.0, 0.0);
+
+	set_matrix(f_yaw->process_noise_covariance,
+				0.001, 	0.0,
+				0.0, 		0.003);
+	//set_matrix(f_yaw->process_noise_covariance,
+	//			0.00001, 	0.0,
+	//			0.0, 		0.00003);
+	// set_matrix(f_yaw->process_noise_covariance,
+	//  			10.0, 	0.0,
+	//  			0.0, 		10.0);
+	set_matrix(f_yaw->measure_noise_covariance, 0.2);
+	//set_matrix(f_yaw->measure_noise_covariance, 50.0);
+	//set_matrix(f_yaw->measure_noise_covariance, 0.03);
+
+	float deviation = 1000.0;
+	set_matrix(f_yaw->state_estimate, 0.0, 0.0);
+	m_ident(f_yaw->covariance_estimate);
+	sm_mlt(deviation * deviation, f_yaw->covariance_estimate, f_yaw->covariance_estimate);
+
+	return 0;
+}
+
+/**
+ * kalman apply in euler
+ * @return  [description]
+ */
+int kalman_init2(void)
+{
+	alloc_kalman_filter(&f_yaw, 6, 3, 3);
+
+	set_matrix(f_yaw->state_transition,
+				1.0, 	-DELT_T, 0.0, 0.0, 0.0, 0.0,
+				0.0, 	1.0, 		 0.0, 0.0, 0.0, 0.0,
+				0.0, 0.0, 1.0, -DELT_T, 0.0, 0.0,
+				0.0 ,0.0, 0.0, 1.0, 0.0 ,0.0,
+				0.0, 0.0, 0.0, 0.0, 1.0, -DELT_T,
+				0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
+	set_matrix(f_yaw->control_input_model, DELT_T, 0.0, 0.0,
+											0.0, 0.0, 0.0,
+											0.0, DELT_T, 0.0,
+											0.0, 0.0, 0.0,
+											0.0, 0.0, DELT_T,
+											0.0, 0.0, 0.0);
+	//set_matrix(f_yaw->control_input_model, 0.01, 0.0);
+	set_matrix(f_yaw->measure_model, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+										0.0, 0.0, 1.0, 0.0, 0.0, 0.0,
+										0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
+
+	set_matrix(f_yaw->process_noise_covariance,
+				0.001, 0.0, 0.0, 0.0, 0.0, 0.0,
+				0.0, 0.003, 0.0, 0.0, 0.0, 0.0,
+				0.0, 0.0, 0.001, 0.0, 0.0, 0.0,
+				0.0, 0.0, 0.0, 0.003, 0.0, 0.0,
+				0.0, 0.0, 0.0, 0.0, 0.001, 0.0,
+				0.0, 0.0, 0.0, 0.0, 0.0, 0.003);
+	//set_matrix(f_yaw->process_noise_covariance,
+	//			0.00001, 	0.0,
+	//			0.0, 		0.00003);
+	// set_matrix(f_yaw->process_noise_covariance,
+	//  			10.0, 	0.0,
+	//  			0.0, 		10.0);
+	set_matrix(f_yaw->measure_noise_covariance, 0.2, 0.0, 0.0,
+												0.0, 0.2, 0.0,
+												0.0, 0.0, 0.2);
+	//set_matrix(f_yaw->measure_noise_covariance, 50.0);
+	//set_matrix(f_yaw->measure_noise_covariance, 0.03);
+
+	float deviation = 1000.0;
+	set_matrix(f_yaw->state_estimate, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+	m_ident(f_yaw->covariance_estimate);
+	sm_mlt(deviation * deviation, f_yaw->covariance_estimate, f_yaw->covariance_estimate);
+
+	return 0;
+}
+
+/**
+ * verify whether print calibration of accelerometer and gyroscope
+ * @param on [description]
+ */
 void mpu9150_set_debug(int on)
 {
 	debug_on = on;
@@ -139,7 +236,12 @@ int mpu9150_init(int i2c_bus, int sample_rate, int mix_factor)
 
 	printf(".");
 	fflush(stdout);
-
+	/*
+	DMP_FEATURE_LP_QUAT and DMP_FEATURE_6X_LP_QUAT are mutually
+ *  exclusive.
+ *  DMP_FEATURE_SEND_RAW_GYRO and DMP_FEATURE_SEND_CAL_GYRO are also
+ *  mutually exclusive.
+ *  */
   	if (dmp_enable_feature(DMP_FEATURE_6X_LP_QUAT | DMP_FEATURE_SEND_RAW_ACCEL
 						| DMP_FEATURE_SEND_CAL_GYRO | DMP_FEATURE_GYRO_CAL)) {
 		printf("\ndmp_enable_feature() failed\n");
@@ -168,31 +270,9 @@ int mpu9150_init(int i2c_bus, int sample_rate, int mix_factor)
 
 	printf(".");
 	fflush(stdout);
-	alloc_kalman_filter(&f_yaw, 2, 1, 1);
 
-	set_matrix(f_yaw->state_transition,
-				1.0,  	-DELT_T,
-				0.0, 		1.0);
-	set_matrix(f_yaw->control_input_model, (double)DELT_T, 0.0);
-	//set_matrix(f_yaw->control_input_model, 0.01, 0.0);
-	set_matrix(f_yaw->measure_model, 1.0, 0.0);
-
-//	set_matrix(f_yaw->process_noise_covariance,
-//				0.001, 	0.0,
-//				0.0, 		0.003);
-	//set_matrix(f_yaw->process_noise_covariance,
-	//			0.00001, 	0.0,
-	//			0.0, 		0.00003);
-	set_matrix(f_yaw->process_noise_covariance,
-	 			1.0, 	0.0,
-	 			0.0, 		1.0);
-	//set_matrix(f_yaw->measure_noise_covariance, 0.2);
-	set_matrix(f_yaw->measure_noise_covariance, 5.0);
-	float deviation = 1000.0;
-	set_matrix(f_yaw->state_estimate, 0.0, 0.0);
-	m_ident(f_yaw->covariance_estimate);
-	sm_mlt(deviation * deviation, f_yaw->covariance_estimate, f_yaw->covariance_estimate);
-
+	kalman_init();
+	//kalman_init2();
 	printf(" done\n\n");
 
 	return 0;
@@ -200,6 +280,7 @@ int mpu9150_init(int i2c_bus, int sample_rate, int mix_factor)
 
 void mpu9150_exit()
 {
+	//free memory of kalman filter
 	free_kalman_filter(&f_yaw);
 	// turn off the DMP on exit
 	if (mpu_set_dmp_state(0))
@@ -354,16 +435,17 @@ int mpu9150_read(mpudata_t *mpu)
 	calibrate_data(mpu);
 
 #ifdef MPU9150_DEBUG
-	static uint32_t tmp_time;
+	static uint64_t tmp_time;
 	get_ns(&tmp_time);
 #endif
 
+	//data_fusion_kalman2(mpu);
 	data_fusion_kalman(mpu);
 	//data_fusion(mpu);
 	//update_ahrs(mpu);
 
 #ifdef MPU9150_DEBUG
-	static uint32_t tmp_time2;
+	static uint64_t tmp_time2;
 	get_ns(&tmp_time2);
 	fprintf(stdout, "\n");
 	fprintf(stdout, "fusion time is %lu ns\n", ( unsigned long)(tmp_time2 - tmp_time));
@@ -372,9 +454,10 @@ int mpu9150_read(mpudata_t *mpu)
 	return 0;
 }
 
-
-
-
+/**
+ * verify whethe data in mpu9150 fifo is ready
+ * @return [description]
+ */
 int data_ready()
 {
 	short status;
@@ -521,7 +604,124 @@ int data_fusion(mpudata_t *mpu)
 	return 0;
 }
 
+/**
+ * kalman filter apply in data fusion to estimate euler
+ * @param  mpu [description]
+ * @return     [description]
+ */
+int data_fusion_kalman2(mpudata_t *mpu)
+{
+	//static quaternion_t dmp_quat;
+	static vector3d_t measure_euler;
+	float tmp_norm;
+	tmp_norm = inv_sqrt(mpu->calibratedAccel[VEC3_X] * mpu->calibratedAccel[VEC3_X] +
+							mpu->calibratedAccel[VEC3_Y] * mpu->calibratedAccel[VEC3_Y] +
+							mpu->calibratedAccel[VEC3_Z] * mpu->calibratedAccel[VEC3_Z]);
+	measure_euler[VEC3_Y] = -asin(mpu->calibratedAccel[VEC3_X] * tmp_norm);
+	measure_euler[VEC3_X] = atan2(mpu->calibratedAccel[VEC3_Y], mpu->calibratedAccel[VEC3_Z]);
 
+	static double hn_y, hn_x;
+	static double mag[3];
+	mag[VEC3_X] = mpu->calibratedMag[VEC3_X];
+	mag[VEC3_Y] = mpu->calibratedMag[VEC3_Y];
+	mag[VEC3_Z] = mpu->calibratedMag[VEC3_Z];
+
+	hn_y = mag[VEC3_Y] * cos(measure_euler[VEC3_X]) - mag[VEC3_Z] * sin(measure_euler[VEC3_X]);
+	hn_x = mag[VEC3_X] * cos(measure_euler[VEC3_Y]) + mag[VEC3_Y] * sin(measure_euler[VEC3_X]) * sin(measure_euler[VEC3_Y]) + mag[VEC3_Z] * cos(measure_euler[VEC3_X]) * sin(measure_euler[VEC3_Y]);
+	measure_euler[VEC3_Z] = (double) atan2(-hn_y, hn_x);
+	// change the range of mag_angle into 0 - 2 * PI,it is necessary
+	if(measure_euler[VEC3_Z]  < 0)
+	{
+		measure_euler[VEC3_Z]  += 2 * PI;
+	}
+
+	static double delt_t = 0.0;
+	if (mag_time_init)
+	{
+		delt_t = (double)(mpu->magTimestamp - last_mag_time);
+		last_mag_time = mpu->magTimestamp;
+		fprintf(stdout, "delt_t is %f\n", delt_t * 1e-3);
+		set_matrix(f_yaw->state_transition,
+				1.0, 	-delt_t * 1e-3, 0.0, 0.0, 0.0, 0.0,
+				0.0, 	1.0, 		 0.0, 0.0, 0.0, 0.0,
+				0.0, 0.0, 1.0, -delt_t * 1e-3, 0.0, 0.0,
+				0.0 ,0.0, 0.0, 1.0, 0.0 ,0.0,
+				0.0, 0.0, 0.0, 0.0, 1.0, -delt_t * 1e-3,
+				0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
+
+		set_matrix(f_yaw->control_input_model, delt_t * 1e-3, 0.0, 0.0,
+												0.0, 0.0, 0.0,
+												 0.0, delt_t * 1e-3, 0.0,
+												0.0, 0.0, 0.0,
+												0.0, 0.0, delt_t * 1e-3,
+												0.0, 0.0, 0.0);
+	}
+	else
+	{
+		last_mag_time = mpu->magTimestamp;
+		mag_time_init = true ;
+	}
+
+	//if (i <= 5)
+	//{
+	//	mag_yaw += mag_angle;
+
+	//}
+	//else
+	//{
+	 	//i = 0;
+	 	//mag_angle = mag_yaw / 5;
+		//mag_yaw = 0;
+	set_matrix(f_yaw->measure,  measure_euler[VEC3_X], measure_euler[VEC3_Y], measure_euler[VEC3_Z]);
+		//fprintf(stdout, "measure is : %f\n", (double) mag_angle * RAD_TO_DEG);
+
+#ifdef KALMAN_DEBUG
+	fprintf(stdout, "\n");
+	fprintf(stdout, "measure is : \n");
+	m_output(f_yaw->measure);
+#endif
+
+	set_matrix(f_yaw->control_input, (double)mpu->rawGyro[VEC3_X] / 16.4 / 180 * PI,
+									(double)mpu->rawGyro[VEC3_Y] / 16.4 / 180 * PI,
+									(double)mpu->rawGyro[VEC3_Z] / 16.4 / 180 * PI);
+
+#ifdef KALMAN_DEBUG
+	fprintf(stdout, "\n");
+	fprintf(stdout, "control_input is \n");
+	m_output(f_yaw->control_input);
+#endif
+	predict(f_yaw);
+	update(f_yaw);
+
+#ifdef KALMAN_DEBUG
+	fprintf(stdout, "covariance_estimate is :\n");
+	m_output(f_yaw->covariance_estimate);
+#endif
+
+	mpu->fusedEuler[VEC3_X] = f_yaw->state_estimate->me[0][0];
+	mpu->fusedEuler[VEC3_Y] = f_yaw->state_estimate->me[2][0];
+
+	//the range of mpu->fuseEuler is -PI to PI
+	if (f_yaw->state_estimate->me[0][0] >=  PI)
+	{
+		mpu->fusedEuler[VEC3_Z] = f_yaw->state_estimate->me[4][0] - 2 * PI;
+	}
+	else
+	{
+		mpu->fusedEuler[VEC3_Z] = f_yaw->state_estimate->me[4][0];
+	}
+
+
+
+	return 0;
+
+}
+
+/**kalman filter apply in data fusion to estimate yaw
+ * [data_fusion_kalman description]
+ * @param  mpu [description]
+ * @return     [description]
+ */
 int data_fusion_kalman(mpudata_t *mpu)
 {
 	static quaternion_t dmp_quat;
@@ -548,12 +748,30 @@ int data_fusion_kalman(mpudata_t *mpu)
 	hn_y = mag[VEC3_Y] * cos(dmp_euler[VEC3_X]) - mag[VEC3_Z] * sin(dmp_euler[VEC3_X]);
 	hn_x = mag[VEC3_X] * cos(dmp_euler[VEC3_Y]) + mag[VEC3_Y] * sin(dmp_euler[VEC3_X]) * sin(dmp_euler[VEC3_Y]) + mag[VEC3_Z] * cos(dmp_euler[VEC3_X]) * sin(dmp_euler[VEC3_Y]);
 	mag_angle = (double) atan2(-hn_y, hn_x);
-	//if(mag_angle < 0)
-	//{
-	//	mag_angle += 2 * PI;
-	//}
-	static char i = 0;
-	i++;
+	// change the range of mag_angle into 0 - 2 * PI,it is necessary
+	if(mag_angle < 0)
+	{
+		mag_angle += 2 * PI;
+	}
+
+	static double delt_t = 0.0;
+	if (mag_time_init)
+	{
+		delt_t = (double)(mpu->magTimestamp - last_mag_time);
+		last_mag_time = mpu->magTimestamp;
+		//fprintf(stdout, "delt_t is %f\n", delt_t * 1e-3);
+		set_matrix(f_yaw->state_transition,
+						1.0,  	-delt_t * 1e-3,
+						0.0, 		1.0);
+		set_matrix(f_yaw->control_input_model, delt_t * 1e-3, 0.0);
+	}
+	else
+	{
+		last_mag_time = mpu->magTimestamp;
+		mag_time_init = true ;
+	}
+
+
 	static float mag_yaw = 0;
 	//if (i <= 5)
 	//{
@@ -562,7 +780,7 @@ int data_fusion_kalman(mpudata_t *mpu)
 	//}
 	//else
 	//{
-	 	i = 0;
+	 	//i = 0;
 	 	//mag_angle = mag_yaw / 5;
 		//mag_yaw = 0;
 		set_matrix(f_yaw->measure,  mag_angle);
@@ -588,8 +806,15 @@ int data_fusion_kalman(mpudata_t *mpu)
 	fprintf(stdout, "covariance_estimate is :\n");
 	m_output(f_yaw->covariance_estimate);
 #endif
-
-	mpu->fusedEuler[VEC3_Z] = f_yaw->state_estimate->me[0][0];
+	//the range of mpu->fuseEuler is -PI to PI
+	if (f_yaw->state_estimate->me[0][0] >=  PI)
+	{
+		mpu->fusedEuler[VEC3_Z] = f_yaw->state_estimate->me[0][0] - 2 * PI;
+	}
+	else
+	{
+		mpu->fusedEuler[VEC3_Z] = f_yaw->state_estimate->me[0][0];
+	}
 
 	//}
 

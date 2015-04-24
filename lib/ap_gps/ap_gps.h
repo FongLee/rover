@@ -1,5 +1,6 @@
 #ifndef AP_GPS_H
 #define AP_GPS_H
+#include <stdint.h>
 
 #include <nmea/nmea.h>
 #include "ap_location.h" 
@@ -15,8 +16,8 @@ extern unsigned long last_good_update;
 extern unsigned long last_good_lat;
 extern unsigned long last_good_lon;
 extern VEC *last_good_vel;
-extern unsigned long gps_timestamp;
-
+extern uint64_t gps_timestamp;
+extern struct location gps_loc;
 int gps_init();
 void gps_end();
 void gps_parse();

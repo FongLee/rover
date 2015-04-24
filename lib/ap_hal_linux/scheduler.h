@@ -9,11 +9,11 @@
 //extern void timer_update(union sigval v);
 int scheduler_init();
 int scheduler_begin();
-int linux_get_ms(uint32_t *count);
-int linux_get_us(uint32_t *count);
-void delay_microseconds(uint32_t usec);
-void linux_delay_ms(uint32_t num_ms);
-int linux_get_ns(uint32_t *count);
+int linux_get_ms(uint64_t *count);
+int linux_get_us(uint64_t *count);
+void delay_microseconds(uint64_t usec);
+void linux_delay_ms(uint64_t num_ms);
+int linux_get_ns(uint64_t *count);
 
 
 #endif

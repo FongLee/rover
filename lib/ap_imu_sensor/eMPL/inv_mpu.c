@@ -905,7 +905,7 @@ int mpu_lp_accel_mode(unsigned char rate)
  *  @param[out] timestamp   Timestamp in milliseconds. Null if not needed.
  *  @return     0 if successful.
  */
-int mpu_get_gyro_reg(short *data, unsigned long *timestamp)
+int mpu_get_gyro_reg(short *data, uint64_t *timestamp)
 {
     unsigned char tmp[6];
 
@@ -928,7 +928,7 @@ int mpu_get_gyro_reg(short *data, unsigned long *timestamp)
  *  @param[out] timestamp   Timestamp in milliseconds. Null if not needed.
  *  @return     0 if successful.
  */
-int mpu_get_accel_reg(short *data, unsigned long *timestamp)
+int mpu_get_accel_reg(short *data, uint64_t *timestamp)
 {
     unsigned char tmp[6];
 
@@ -951,7 +951,7 @@ int mpu_get_accel_reg(short *data, unsigned long *timestamp)
  *  @param[out] timestamp   Timestamp in milliseconds. Null if not needed.
  *  @return     0 if successful.
  */
-int mpu_get_temperature(long *data, unsigned long *timestamp)
+int mpu_get_temperature(long *data, uint64_t *timestamp)
 {
     unsigned char tmp[2];
     short raw;
@@ -1631,7 +1631,7 @@ int mpu_get_int_status(short *status)
  *  @param[out] more        Number of remaining packets.
  *  @return     0 if successful.
  */
-int mpu_read_fifo(short *gyro, short *accel, unsigned long *timestamp,
+int mpu_read_fifo(short *gyro, short *accel, uint64_t *timestamp,
         unsigned char *sensors, unsigned char *more)
 {
     /* Assumes maximum packet size is gyro (6) + accel (6). */
@@ -1672,7 +1672,7 @@ int mpu_read_fifo(short *gyro, short *accel, unsigned long *timestamp,
             return -2;
         }
     }
-    get_ms((unsigned long*)timestamp);
+    get_ms(timestamp);
 
     if (i2c_read(st.hw->addr, st.reg->fifo_r_w, packet_size, data))
         return -1;
@@ -2468,7 +2468,7 @@ static int setup_compass(void)
  *  @param[out] timestamp   Timestamp in milliseconds. Null if not needed.
  *  @return     0 if successful.
  */
-int mpu_get_compass_reg(short *data, unsigned long *timestamp)
+int mpu_get_compass_reg(short *data, uint64_t *timestamp)
 {
 #ifdef AK89xx_SECONDARY
     unsigned char tmp[9];
@@ -2509,7 +2509,8 @@ int mpu_get_compass_reg(short *data, unsigned long *timestamp)
     data[2] = ((long)data[2] * st.chip_cfg.mag_sens_adj[2]) >> 8;
 
     if (timestamp)
-        get_ms(timestamp);
+        get_ns(timestamp);
+	*timestamp = *timestamp / 1e6;
     return 0;
 #else
     return -1;

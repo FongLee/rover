@@ -77,7 +77,7 @@ int scheduler_begin(void timer_update(union sigval v))
 // 	return 0;
 // }
 
-int linux_get_ms(uint32_t *count)
+int linux_get_ms(uint64_t *count)
 {
 	static struct timespec t;
 	if (!count)
@@ -88,12 +88,12 @@ int linux_get_ms(uint32_t *count)
 		return -1;
 	}
 	//*count = (t.tv_sec * 1000) + (t.tv_usec / 1000) - (start_time.tv_sec * 1000) - (start_time.tv_usec / 1000);
-	*count = (uint32_t)(t.tv_sec * 1e3 - start_ntime.tv_sec * 1e3) + (uint32_t)(t.tv_nsec / 1e6  - start_ntime.tv_nsec / 1e6);
+	*count = (uint64_t)(t.tv_sec * 1e3 - start_ntime.tv_sec * 1e3) + (uint64_t)(t.tv_nsec / 1e6  - start_ntime.tv_nsec / 1e6);
 	//*count = (t.tv_sec * 1e3) + (t.tv_nsec * 1e6);
 	return 0;
 }
 
-int linux_get_us(uint32_t *count)
+int linux_get_us(uint64_t *count)
 {
 	struct timespec t;
 
@@ -106,12 +106,12 @@ int linux_get_us(uint32_t *count)
 		return -1;
 	}
 
-	*count = (uint32_t)(t.tv_sec * 1e6 - start_ntime.tv_sec * 1e6) + (uint32_t)(t.tv_nsec / 1e3  - start_ntime.tv_nsec / 1e3);
+	*count = (uint64_t)(t.tv_sec * 1e6 - start_ntime.tv_sec * 1e6) + (uint64_t)(t.tv_nsec / 1e3  - start_ntime.tv_nsec / 1e3);
 	//*count = (t.tv_sec * 1e6) + (t.tv_nsec * 1e3);
 	return 0;
 }
 
-int linux_get_ns(uint32_t *count)
+int linux_get_ns(uint64_t *count)
 {
 	struct timespec t;
 
@@ -124,12 +124,12 @@ int linux_get_ns(uint32_t *count)
 		return -1;
 	}
 
-	*count = (uint32_t)(t.tv_sec * 1e9 - start_ntime.tv_sec * 1e9) +  (uint32_t)(t.tv_nsec - start_ntime.tv_nsec);
+	*count = (uint64_t)(t.tv_sec * 1e9 - start_ntime.tv_sec * 1e9) +  (uint64_t)(t.tv_nsec - start_ntime.tv_nsec);
 	//*count = (t.tv_sec * 1e6) + (t.tv_nsec * 1e3);
 	return 0;
 }
 
-void delay_microseconds(uint32_t usec)
+void delay_microseconds(uint64_t usec)
 {
 	struct timespec  ts;
 	ts.tv_sec = 0;
@@ -137,7 +137,7 @@ void delay_microseconds(uint32_t usec)
 	while (nanosleep(&ts, &ts) == -1);
 }
 
-void linux_delay_ms(uint32_t num_ms)
+void linux_delay_ms(uint64_t num_ms)
 {
 	struct timespec  ts;
 	ts.tv_sec = num_ms / 1000;
