@@ -116,13 +116,13 @@ int main(int argc, char **argv)
 		}
 	}
 
-	while(main_done == 0)
-	{
+	//while(main_done == 0)
+	//{
+		//sleep(1);
+	//}
 
-	}
 
-
-	//res = pthread_join(transfer_thread, &thread_result);
+	res = pthread_join(read_imu_thread, &thread_result);
 	return 0;
 }
 

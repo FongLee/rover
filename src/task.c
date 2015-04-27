@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #include "communication.h"
 #include "settings.h"
@@ -16,6 +17,7 @@ void *task_transfer()
 
 	while(1)
 	{
+		usleep(5000);
 		if (send_system_state_now)
 		{
 			send_system_state_now = false;
@@ -90,6 +92,7 @@ void *task_read_imu()
 	while(done == 0)
 	{
 
+		usleep(5000);
 		if (mag_mode == 1)
 		{
 			fprintf(stdout, "mag start to calibration\n");
@@ -152,6 +155,7 @@ void *task_read_gps()
 
 	while(1)
 	{
+		usleep(10000);
 		if (read_gps_now)
 		{
 			read_gps_now = false;
@@ -166,6 +170,7 @@ void *task_control()
 {
 	while(1)
 	{
+		usleep(10000);
 		if (begin_control)
 		{
 			begin_control = false;

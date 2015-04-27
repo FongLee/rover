@@ -1,14 +1,18 @@
-.PHONY: test
+.PHONY: all
 
-all:  test
+
+all:  ./install/test
 
 CC = arm-linux-gcc
-CFLAGS = -Wall -std=gnu99 -c
-
+#-pg
+CFLAGS = -Wall -std=gnu99 -c -g
+#-pg
+LDFLAGS =
 #add  -DGPS_DEBUG -DUDP_DEBUG -DCOMMU_DEBUG
 # -DI2C_DEBUG -DMPU9150_DEBUG  -DKALMAN_DEBUG  -DAHRS_DEBUG for debugging
 DEFS = -DEMPL_TARGET_LINUX -DMPU9150 -DAK8975_SECONDARY -DUDP_DEBUG -DCOMMU_DEBUG
 
+INSTALL_PATH = ./install
 SRCDIR = ./src
 MAVLINKDIR = ./lib/mavlink
 MAVLINKDIR2 = ./lib/mavlink/common
@@ -57,8 +61,8 @@ INCS = -I $(MAVLINKDIR) -I $(MAVLINKDIR2) -I $(SRCDIR)  -I $(HALDIR) \
 		-I $(MATRIXDIR) -I $(MATHDIR) -I $(AHRSDIR) -I $(NMEADIR) \
 		-I $(NMEADIR)/include    -I $(GPSDIR) -I $(CONTROLDIR)
 
-test: $(OBJS)
-	$(CC) $(INCS) $^ $(LIBS) -o $@
+./install/test: $(OBJS)
+	$(CC) $(INCS) $^   $(LIBS) $(LDFLAGS)  -o $@
 
 %.o: %.c
 	$(CC) $(CFLAGS) $(INCS) $(DEFS) $< -o $@
@@ -67,8 +71,11 @@ $(MATRIXDIR)/meschach.a:
 	cd $(MATRIXDIR) && make CC=arm-linux-gcc
 
 $(NMEADIR)/lib/libnmea.a:
-	cd $(NMEADIR) && make
+	cd $(NMEADIR) && make CC=arm-linux-gcc
 
+install: test
+	mv test $(INSTALL_PATH)
 clean:
 	rm -f $(OBJS)
 	cd $(MATRIXDIR) && make clean
+	cd $(NMEADIR) && make clean
