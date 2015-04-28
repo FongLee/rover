@@ -4,6 +4,10 @@
 #include "matrix2.h" //m_inverse
 #include "matrix_kalman.h"
 
+#ifdef MEMWATCH
+#include "memwatch.h"
+#endif
+
 /**
  * alloc a kalman_filter
  * @param  f                 [description]

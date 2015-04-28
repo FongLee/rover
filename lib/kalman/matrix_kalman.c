@@ -1,6 +1,9 @@
 #include <stdarg.h>
 #include "matrix.h"
 
+#ifndef MEMWATCH
+#include "memwatch.h"
+#endif
 MAT *m_mlt_by_trans(MAT *a, MAT *b, MAT *out)
 {
 	static MAT *c;

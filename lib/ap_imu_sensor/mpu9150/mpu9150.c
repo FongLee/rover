@@ -23,6 +23,11 @@
 #include "scheduler.h"
 #include "ap_ahrs.h"
 
+#ifdef MEMWATCH
+#include "memwatch.h"
+#endif
+
+
 int kalman_init(void);
 static int data_ready();
 static void calibrate_data(mpudata_t *mpu);

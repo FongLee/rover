@@ -15,6 +15,9 @@
 #include "ap_gps.h"
 #include "ap_control.h"
 
+#ifdef MEMWATCH
+#include "memwatch.h"
+#endif
 int register_sig_handler();
 
 void sigint_main_handler(int sig);

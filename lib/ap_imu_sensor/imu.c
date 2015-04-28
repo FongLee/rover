@@ -18,6 +18,9 @@
 #include "matrix.h"
 #include "mpu_calibration.h"
 
+#ifdef MEMWATCH
+#include "memwatch.h"
+#endif
 
 int done = 0;
 

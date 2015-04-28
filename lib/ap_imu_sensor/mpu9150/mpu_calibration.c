@@ -4,6 +4,12 @@
 #include "matrix_kalman.h"
 #include "mpu_calibration.h"
 #include "ap_math.h"
+
+#ifdef MEMWATCH
+#include "memwatch.h"
+#endif
+
+
 //#include "matrix.h"
 #define PARA_NUM 6
 #define MEA_NUM 6

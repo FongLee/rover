@@ -1,7 +1,7 @@
 .PHONY: all
 
 
-all:  ./install/test
+all:  ./install/rover
 
 CC = arm-linux-gcc
 #-pg
@@ -10,7 +10,8 @@ CFLAGS = -Wall -std=gnu99 -c -g
 LDFLAGS =
 #add  -DGPS_DEBUG -DUDP_DEBUG -DCOMMU_DEBUG
 # -DI2C_DEBUG -DMPU9150_DEBUG  -DKALMAN_DEBUG  -DAHRS_DEBUG for debugging
-DEFS = -DEMPL_TARGET_LINUX -DMPU9150 -DAK8975_SECONDARY -DUDP_DEBUG -DCOMMU_DEBUG
+DEFS = -DEMPL_TARGET_LINUX -DMPU9150 -DAK8975_SECONDARY -DUDP_DEBUG -DCOMMU_DEBUG \
+			-DMEMWATCH -DMEMWATCH_STDIO
 
 INSTALL_PATH = ./install
 SRCDIR = ./src
@@ -27,6 +28,7 @@ AHRSDIR = ./lib/ap_ahrs
 NMEADIR = ./lib/nmealib
 GPSDIR = ./lib/ap_gps
 CONTROLDIR = ./lib/ap_control
+MEMDIR= ./lib/memwatch
 
 OBJS = $(SRCDIR)/communication.o \
 		$(SRCDIR)/settings.o \
@@ -51,7 +53,9 @@ OBJS = $(SRCDIR)/communication.o \
        	$(GPSDIR)/ap_gps.o \
        	$(CONTROLDIR)/ap_control.o \
        	$(MATRIXDIR)/meschach.a \
-       	$(NMEADIR)/lib/libnmea.a
+       	$(NMEADIR)/lib/libnmea.a \
+       	$(MEMDIR)/memwatch.o \
+
        	#ap_ahrs.o \
 
 LIBS = -lpthread -lrt -lm
@@ -59,9 +63,10 @@ LIBS = -lpthread -lrt -lm
 INCS = -I $(MAVLINKDIR) -I $(MAVLINKDIR2) -I $(SRCDIR)  -I $(HALDIR) \
 		-I $(IMUDIR)/eMPL -I $(IMUDIR)/mpu9150 -I $(IMUDIR) -I $(KALDIR) \
 		-I $(MATRIXDIR) -I $(MATHDIR) -I $(AHRSDIR) -I $(NMEADIR) \
-		-I $(NMEADIR)/include    -I $(GPSDIR) -I $(CONTROLDIR)
+		-I $(NMEADIR)/include    -I $(GPSDIR) -I $(CONTROLDIR) \
+		-I $(MEMDIR)
 
-./install/test: $(OBJS)
+./install/rover: $(OBJS)
 	$(CC) $(INCS) $^   $(LIBS) $(LDFLAGS)  -o $@
 
 %.o: %.c
