@@ -79,6 +79,8 @@ int main(int argc, char **argv)
 	pthread_t control_thread;
 
 	void *thread_result;
+
+	
 	if (communication_init(ip_addr) == 0)
 	{
 		flag_communication_init = true;
@@ -98,6 +100,7 @@ int main(int argc, char **argv)
 			fprintf(stderr, "task:read imu failed:%s\n", strerror(errno));
 		}
 	}
+
 
 	if (gps_init() == 0)
 	{

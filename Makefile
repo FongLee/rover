@@ -1,17 +1,18 @@
-.PHONY: all
+#./install/rover
+.PHONY: all rover
 
 
-all:  ./install/rover
+all:  before rover
 
 CC = arm-linux-gcc
 #-pg
 CFLAGS = -Wall -std=gnu99 -c -g
-#-pg
+#-pg -lefence -g -static
 LDFLAGS =
 #add  -DGPS_DEBUG -DUDP_DEBUG -DCOMMU_DEBUG
-# -DI2C_DEBUG -DMPU9150_DEBUG  -DKALMAN_DEBUG  -DAHRS_DEBUG for debugging
+# -DI2C_DEBUG -DMPU9150_DEBUG  -DKALMAN_DEBUG  -DAHRS_DEBUG  -DMEMWATCH -DMEMWATCH_STDIO for debugging
 DEFS = -DEMPL_TARGET_LINUX -DMPU9150 -DAK8975_SECONDARY -DUDP_DEBUG -DCOMMU_DEBUG \
-			-DMEMWATCH -DMEMWATCH_STDIO
+
 
 INSTALL_PATH = ./install
 SRCDIR = ./src
@@ -29,6 +30,7 @@ NMEADIR = ./lib/nmealib
 GPSDIR = ./lib/ap_gps
 CONTROLDIR = ./lib/ap_control
 MEMDIR= ./lib/memwatch
+FENCEDIR = ./lib/electric_fence
 
 OBJS = $(SRCDIR)/communication.o \
 		$(SRCDIR)/settings.o \
@@ -55,10 +57,10 @@ OBJS = $(SRCDIR)/communication.o \
        	$(MATRIXDIR)/meschach.a \
        	$(NMEADIR)/lib/libnmea.a \
        	$(MEMDIR)/memwatch.o \
-
+       	#$(FENCEDIR)/lib/libefence.a
        	#ap_ahrs.o \
-
-LIBS = -lpthread -lrt -lm
+#change to -lpthread is incorrect -lrt
+LIBS = -pthread  -lm  -lrt -L $(FENCEDIR)/lib
 
 INCS = -I $(MAVLINKDIR) -I $(MAVLINKDIR2) -I $(SRCDIR)  -I $(HALDIR) \
 		-I $(IMUDIR)/eMPL -I $(IMUDIR)/mpu9150 -I $(IMUDIR) -I $(KALDIR) \
@@ -66,17 +68,24 @@ INCS = -I $(MAVLINKDIR) -I $(MAVLINKDIR2) -I $(SRCDIR)  -I $(HALDIR) \
 		-I $(NMEADIR)/include    -I $(GPSDIR) -I $(CONTROLDIR) \
 		-I $(MEMDIR)
 
-./install/rover: $(OBJS)
-	$(CC) $(INCS) $^   $(LIBS) $(LDFLAGS)  -o $@
+before:
+	cd $(FENCEDIR) && make  LIB_INSTALL_DIR=./lib MAN_INSTALL_DIR=./man  CC=arm-linux-gcc AR=arm-linux-ar install
+
+rover: $(OBJS)
+	$(CC) $(INCS) $^    $(LDFLAGS) $(LIBS)  -o $@
+	#$(CC) $(INCS) $^    -lefence   $(LIBS)  -o $@
 
 %.o: %.c
 	$(CC) $(CFLAGS) $(INCS) $(DEFS) $< -o $@
 
 $(MATRIXDIR)/meschach.a:
-	cd $(MATRIXDIR) && make CC=arm-linux-gcc
+	cd $(MATRIXDIR) && make CC=arm-linux-gcc CFLAGS='-O -g'
 
 $(NMEADIR)/lib/libnmea.a:
-	cd $(NMEADIR) && make CC=arm-linux-gcc
+	cd $(NMEADIR) && make CC=arm-linux-gcc CFLAGS=-g
+
+$(FENCEDIR)/lib/libefence.a:
+	cd $(FENCEDIR) && make  LIB_INSTALL_DIR=./lib MAN_INSTALL_DIR=./man  CC=arm-linux-gcc AR=arm-linux-ar install
 
 install: test
 	mv test $(INSTALL_PATH)
@@ -84,3 +93,4 @@ clean:
 	rm -f $(OBJS)
 	cd $(MATRIXDIR) && make clean
 	cd $(NMEADIR) && make clean
+	cd $(FENCEDIR) && make clean
