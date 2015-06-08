@@ -1,12 +1,21 @@
 #ifndef AP_MATH_H
 #define AP_MATH_H
 
+#include "matrix.h"
+
 #define PI 3.141592653589793f
 
 //Single precision conversions
 #define DEG_TO_RAD 0.017453292519943295769236907684886f
 #define RAD_TO_DEG 57.295779513082320876798154814105f
 
+#define VEC3_X	0
+#define VEC3_Y	1
+#define VEC3_Z	2
+
+#define IS_SET(field, mask) (((field)&(mask)) == (mask))
+#define SET_MASK(field, mask) (field) |= (mask)
+#define UNSET_MASK(field, mask) (field) &= ~(mask)
 /**
  * a varient of asin() that checks the input ranges and ensures a
  * valid angle as output. If nan is given as input then zero is
@@ -91,5 +100,9 @@ float pythagorous2(float a, float b);
  * @return   [description]
  */
 float pythagorous3(float a, float b, float c);
+
+float inv_sqrt(float x);
+
+int sor_iteration(MAT * matrix_a, VEC *vec_b, VEC *out);
 
 #endif

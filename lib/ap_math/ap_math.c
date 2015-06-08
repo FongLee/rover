@@ -138,4 +138,101 @@ float pythagorous3(float a, float b, float c)
 	return sqrt(sq(a) + sq(b) + sq(c));
 }
 
+/**
+ * the fast square root algorithm
+ * @param  x [description]
+ * @return   [description]
+ */
+float inv_sqrt(float x)
+{
+	float halfx = 0.5f * x;
+	float y = x;
+	long i = *(long*)&y;
+	i = 0x5f3759df - (i>>1);
+	y = *(float *)&i;
+	y = y * (1.5f - (halfx * y * y));
+	return y;
+}
+
+/**
+ * SOR iteration method
+ * A * b = c
+ * @param  matrix_a [description]
+ * @param  vec_b    [description]
+ * @param  out      [description]
+ * @return          [description]
+ */
+int sor_iteration(MAT * matrix_a, VEC *vec_b, VEC *out)
+{
+	if (matrix_a == NULL || vec_b == NULL || out == NULL)
+	{
+		return -1;
+	}
+	if (matrix_a->m != matrix_a->n
+		|| vec_b->dim != matrix_a->m
+		|| out->dim != vec_b->dim)
+	{
+		return -1;
+	}
+
+	unsigned int para_num= matrix_a->m;
+	double w = 0.9;
+	double precision = 1.0e-10;
+	double tmp;
+	//double x[PARA_NUM] = {0};
+	double *x;
+	//double x[matrix_a->m] = {0};
+	x = malloc(sizeof(double) * para_num);
+
+	int i = 0, j = 0;
+	for (i = 0; i < para_num; i++)
+	{
+		x[i] =0;
+	}
+	for (int k = 0; k < 1000; k++)
+	{
+		for (i = 0; i < para_num; i++)
+		{
+			tmp = 0;
+			for (j = 0; j < para_num; j++)
+			{
+				if (i != j)
+				{
+					tmp +=matrix_a->me[i][j] * out->ve[j];
+				}
+				out->ve[i] = (1 - w) * x[i] + w * (vec_b->ve[i] - tmp) / matrix_a->me[i][i];
+			}
+		}
+
+		for (i = 0; i < para_num; i++)
+		{
+			if (fabs(out->ve[i] - x[i]) < precision)
+			{
+				if (i == (para_num - 1))
+				{
+         			// fprintf(stdout, "your relaxaton factor is %f\n", w);
+            //         fprintf(stdout, "your precision is %f\n", precision);
+                    fprintf(stdout, "iteration is %d\n", k);
+            //         fprintf(stdout, "iteration result is :\n");
+            //         for (int i = 0; i < para_num; i++)
+            //         {
+            //             fprintf(stdout, "x%d is %g\n", i ,out->ve[i]);
+            //         }
+
+                    free(x);
+                    return 0;
+				}
+			}
+			else
+				break;
+		}
+
+		for ( i = 0; i < para_num; i++)
+		{
+			x[i] = out->ve[i];
+		}
+	}
+	 free(x);
+	return -1;
+}
 

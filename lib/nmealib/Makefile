@@ -1,5 +1,6 @@
 CC = arm-linux-gcc
- 
+#-g
+CFLAGS = 
 BIN = lib/libnmea.a 
 #MODULES = generate generator parse parser tok context time info gmath sentence
 MODULES =  generate parse parser tok context time info gmath sentence   
@@ -35,7 +36,7 @@ $(BIN): $(LINKOBJ)
 	ranlib $@
 
 build/nmea_gcc/%.o: src/%.c 
-	$(CC) $(INCS) -c $< -o $@
+	$(CC) $(INCS) -c $(CFLAGS) $< -o $@
 
 samples: $(SMPLS)
 
@@ -43,4 +44,4 @@ samples_%: samples/%/main.o
 	$(CC) $< $(LIBS) -o build/$@
 
 samples/%/main.o: samples/%/main.c
-	$(CC) $(INCS) -c $< -o $@
+	$(CC) $(INCS) -c $(CFLAGS) $< -o $@

@@ -8,12 +8,13 @@
 bool flag_uart_init = false;
 int fd_uart = -1;
 
-int uart_init(const char *serial)         //open uart and initialize the uart
+int uart_init(const char *serial,int baud)         //open uart and initialize the uart
 {	
-	int BAUDRATE;
+	//int BAUDRATE;
 	
 	struct termios oldtio,newtio;
-	//printf("\n");    
+	//printf("\n");   
+	int uartbiit[50] = {B115200,B9600,B19200,B4800,B2400,B1200}; 
 	fd_uart = open(serial, O_RDWR | O_NOCTTY );
 	if( fd_uart <0)
 	{
@@ -26,9 +27,9 @@ int uart_init(const char *serial)         //open uart and initialize the uart
 	//fprintf(stdout, "\nSerial port open successed!!!\n");
 	tcgetattr(fd_uart,&oldtio); //save current serial port settings
 	bzero(&newtio, sizeof(newtio)); // clear struct for new port settings
-	BAUDRATE = B115200;
-	cfsetispeed(&newtio,BAUDRATE);
-	cfsetospeed(&newtio,BAUDRATE);
+	//BAUDRATE = B115200;
+	cfsetispeed(&newtio,uartbiit[baud]);
+	cfsetospeed(&newtio,uartbiit[baud]);
 	// newtio.c_cflag |= CS8 | CLOCAL | CREAD;
 	// newtio.c_iflag = 0;
 	// newtio.c_oflag = 0;
@@ -99,5 +100,16 @@ int read_uart(char *buf, unsigned int n)
 		return -1;
 	}
 	len = read(fd_uart,buf,n);
+	return len;
+}
+
+int write_uart(char *buf,unsigned int n)
+{
+	int len;
+	if (!flag_uart_init)
+	{
+		return -1;
+	}
+	len=write(fd_uart,buf,n);
 	return len;
 }

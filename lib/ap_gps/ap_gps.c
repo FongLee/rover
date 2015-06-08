@@ -21,16 +21,21 @@ unsigned long last_good_update;
 unsigned long last_good_lat;
 unsigned long last_good_lon;
 VEC *last_good_vel;
+uint64_t gps_timestamp;
 
 float radius_cm = 1000;
 float accel_max_cmss = 200;
 
 bool flag_gps_glitching = false;
 bool flag_gps_init = false;
+bool flag_gps = false;
 
 int gps_init()
 {
-	uart_init(UART_DEVICE);
+	if (uart_init(UART_DEVICE,0) != 0)
+	{
+		return -1;
+	}
 	nmea_zero_INFO(&info);
 	last_good_vel = v_get(2);
 	gps_vel = v_get(3);
@@ -62,13 +67,24 @@ void gps_parse()
 //fprintf(stdout, "len is %d\n" , len);
 #ifdef 	GPS_DEBUG
 	fprintf(stdout, "read_uart length is %d\n" , len);
-#endif 
+#endif
 
 	if ( len > 0)
 	{
 		nmea_parse(&parser, gps_buf, len, &info);
+		get_ms(&gps_timestamp);
+#ifdef 	GPS_DEBUG
+        /*dispaly the parsed data*/
+		fprintf(stdout, "gps_timestamp is %lu\n", gps_timestamp);
+        fprintf(stdout, "latitude:%f,longitude:%f\n",info.lat,info.lon);
+        fprintf(stdout, "the satellite being used:%d,the visible satellite:%d\n",info.satinfo.inuse,info.satinfo.inview);
+        fprintf(stdout, "altitude:%f m\n", info.elv);
+        fprintf(stdout, "speed:%f km/h\n", info.speed);
+        fprintf(stdout, "direction:%f degree\n", info.direction);
+#endif
+
 		if (gps_op_mode() >= NMEA_FIX_2D)
-		{	
+		{
 			ground_location(&gps_loc);
 			if (ground_speed() >= GPS_MIN_SPEED)
 			{
@@ -136,7 +152,7 @@ void fill_3d_velocity(VEC *v)
 
 void check_position()
 {
-	unsigned long now ;
+	uint64_t now ;
 	struct location cur_loc;
 	float  sane_dt;
 	float distance_cm;
@@ -149,7 +165,7 @@ void check_position()
 		flag_gps_glitching = true;
 		return ;
 	}
-	if (!flag_gps_init)
+	if (!flag_gps)
 	{
 		last_good_update = now;
 		last_good_lat = gps_loc.lat;
@@ -168,7 +184,7 @@ void check_position()
 	{
 		all_ok = true;
 	}
-	else 
+	else
 	{
 		accel_based_distance = 0.5f * accel_max_cmss * sane_dt * sane_dt;
 		all_ok = (distance_cm <= accel_based_distance);
