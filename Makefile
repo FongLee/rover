@@ -15,7 +15,7 @@ LDFLAGS =
 #add  -DGPS_DEBUG -DUDP_DEBUG -DCOMMU_DEBUG -DMPU9150_DEBUG_ERROR
 #-DI2C_DEBUG -DMPU9150_DEBUG  -DKALMAN_DEBUG  -DAHRS_DEBUG  -DMEMWATCH
 #-DMEMWATCH_STDIO -DULTRA_DEBUG for debugging
-DEFS = -DEMPL_TARGET_LINUX -DMPU9150 -DAK8975_SECONDARY -DGPS_DEBUG
+DEFS = -DEMPL_TARGET_LINUX -DMPU9150 -DAK8975_SECONDARY
 
 
 INSTALL_PATH = ./install
@@ -73,7 +73,7 @@ OBJS = $(SRCDIR)/communication.o \
 		#$(ORTPDIR)/lib/libortp.so
        	#$(FENCEDIR)/lib/libefence.a
        	#ap_ahrs.o \
-#change to -lpthread is incorrect -lrt  -lortp  
+#change to -lpthread is incorrect -lrt  -lortp
 LIBS = -pthread  -lm  -lrt -L $(FENCEDIR)/lib -L $(ORTPDIR)/lib  -lortp
 
 
