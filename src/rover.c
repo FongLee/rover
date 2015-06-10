@@ -14,10 +14,13 @@
 #include "imu.h"
 #include "ap_gps.h"
 #include "ap_control.h"
-
+#include "ap_ultrasonic.h"
+#include "rtpsend.h"
 #ifdef MEMWATCH
 #include "memwatch.h"
 #endif
+
+
 int register_sig_handler();
 
 void sigint_main_handler(int sig);
@@ -33,12 +36,14 @@ void usage(char *argv_0)
 	fprintf(stdout, "example: %s -p \"192.168.1.113\"\n", argv_0);
 	exit(1);
 }
+
 int  rover_init()
 {
 	scheduler_init();
 	scheduler_begin(timer_update);
 	global_data_reset_param_defaults();
 	register_sig_handler();
+
 	return 0;
 
 }
@@ -47,7 +52,8 @@ int main(int argc, char **argv)
 	int opt;
 	int len;
 	char * ip_addr = NULL;
-	while ( (opt = getopt(argc, argv, "p:h")) != -1)
+
+	while ( (opt = getopt(argc, argv, "p:hc")) != -1)
 	{
 		switch (opt)
 		{
@@ -64,6 +70,11 @@ int main(int argc, char **argv)
 			case 'h':
 				usage(argv[0]);
 				break;
+
+			case 'c':
+				flag_control_mode=2;
+				break;
+
 			default:
 				usage(argv[0]);
 				break;
@@ -77,6 +88,9 @@ int main(int argc, char **argv)
 	pthread_t read_imu_thread;
 	pthread_t read_gps_thread;
 	pthread_t control_thread;
+
+	pthread_t camera_thread;
+	pthread_t ultrasonic_thread;
 
 	void *thread_result;
 
@@ -112,6 +126,8 @@ int main(int argc, char **argv)
 		}
 	}
 
+
+
 	if (control_init() == 0)
 	{
 		flag_control_init = true;
@@ -122,10 +138,36 @@ int main(int argc, char **argv)
 		}
 	}
 
+
+
+ 	if(camera_init(ip_addr)==0)
+ 	{
+
+ 		res = pthread_create(&camera_thread, NULL, task_camera, 0);
+		if (res != 0)
+		{
+			fprintf(stderr, "task:camera failed:%s\n", strerror(errno));
+		}
+ 	}
+	
+	
+ 	if(ultrasonic_init()==0)
+ 	{
+ 		res = pthread_create(&ultrasonic_thread, NULL, task_read_ultrasonic, 0);
+		if (res != 0)
+		{
+			fprintf(stderr, "task:ultrasonic failed:%s\n", strerror(errno));
+		}
+ 	}
+
+
+
+
 	//while(main_done == 0)
 	//{
 		//sleep(1);
 	//}
+
 
 
 	res = pthread_join(read_imu_thread, &thread_result);

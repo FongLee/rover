@@ -8,6 +8,7 @@
 #include "scheduler.h"
 #include "ap_math.h"
 
+//#define UART_DEVICE "/dev/ttySAC3"
 #define UART_DEVICE "/dev/ttySAC3"
 #define MAXBUF_UART 200
 #define GPS_MIN_SPEED 3
@@ -32,7 +33,9 @@ bool flag_gps = false;
 
 int gps_init()
 {
-	if (uart_init(UART_DEVICE) != 0)
+
+	if (uart_init(&fd_gps, UART_DEVICE,0) != 0)
+
 	{
 		return -1;
 	}
@@ -54,7 +57,7 @@ int gps_init()
 
 void gps_end()
 {
-	uart_close();
+	uart_close(fd_gps);
 	nmea_parser_destroy(&parser);
 }
 
@@ -63,10 +66,12 @@ void gps_parse()
 	static char gps_buf[MAXBUF_UART];
 	static int len = 0;
 	memset(gps_buf,0,MAXBUF_UART);
-	len = read_uart(gps_buf, MAXBUF_UART);
+	len = read_uart(fd_gps, gps_buf, MAXBUF_UART);
 //fprintf(stdout, "len is %d\n" , len);
 #ifdef 	GPS_DEBUG
+	//gps_buf[len] = '\0';
 	fprintf(stdout, "read_uart length is %d\n" , len);
+	fprintf(stdout, "read_uart buf is %s\n" , gps_buf);
 #endif
 
 	if ( len > 0)
@@ -75,7 +80,7 @@ void gps_parse()
 		get_ms(&gps_timestamp);
 #ifdef 	GPS_DEBUG
         /*dispaly the parsed data*/
-		fprintf(stdout, "gps_timestamp is %lu\n", gps_timestamp);
+		fprintf(stdout, "gps_timestamp is %lu\n", (unsigned long )gps_timestamp);
         fprintf(stdout, "latitude:%f,longitude:%f\n",info.lat,info.lon);
         fprintf(stdout, "the satellite being used:%d,the visible satellite:%d\n",info.satinfo.inuse,info.satinfo.inview);
         fprintf(stdout, "altitude:%f m\n", info.elv);

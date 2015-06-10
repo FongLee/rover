@@ -1,7 +1,7 @@
 #ifndef AP_GPS_H
 #define AP_GPS_H
 #include <stdint.h>
-
+#include <stdbool.h>
 #include <nmea/nmea.h>
 #include "ap_location.h" 
 #include "matrix.h"

@@ -12,6 +12,11 @@
 #include "ap_gps.h"
 #include "ap_control.h"
 
+#include "rtpsend.h"
+#include "ap_ultrasonic.h"
+#include "scheduler.h"
+
+
 void *task_transfer()
 {
 
@@ -182,11 +187,105 @@ void *task_control()
 			}
 			else 
 			{
-				moto_control(channel_throttle, channel_steer);
+
+				if(flag_control_avoid==1)
+				{
+					if(channel_throttle>1700)
+					moto_control(1700, channel_steer);
+					else
+						moto_control(channel_throttle, channel_steer);
+					fprintf(stdout, "The distance is too close \n"); 
+				}
+
+				else
+
+					moto_control(channel_throttle, channel_steer);
+
 				fprintf(stdout, "control mode is in the control \n"); 
 			}
 		}
 
 	}
+
+}
+
+
+void *task_read_ultrasonic()
+{
+
+	while(1)
+	{
+		usleep(50);
+		if (read_ultrasonic_now)
+		{
+			read_ultrasonic_now = false;
+			
+			ultrasonic_read();
+			
+#ifdef ULTRA_DEBUG
+			fprintf(stdout,"distance=%f\n",distance);
+#endif
+			if(distance>10000)
+			{
+				flag_control_avoid=2;//超量程或者是0
+			}
+			if(distance<2000&&distance>0)
+			{
+				flag_control_avoid=1;//很近
+			}
+			else
+			{
+				flag_control_avoid=0;
+			}
+			uint64_t time1 = 0;
+			get_us(&time1);
+
+			// fprintf(fp_dis, "distance=%f time=%ld\n",distance,time1);
+		
+
+		}
+	}
+}
+void *task_camera()
+{
+while(1)
+{
+
+//这一段涉及到异步IO
+
+  // fd_set fds;
+  // struct timeval tv;
+ //  int r;
+
+ //  FD_ZERO (&fds);//将指定的文件描述符集清空
+ //  FD_SET (fd, &fds);//在文件描述符集合中增加一个新的文件描述符
+
+   /* Timeout. */
+ //  tv.tv_sec = 2;
+ //  tv.tv_usec = 0;
+
+ //  r = select (fd + 1, &fds, NULL, NULL, &tv);//判断是否可读（即摄像头是否准备好），tv是定时
+
+ //  if (-1 == r) {
+ //   if (EINTR == errno)
+   //  continue;
+ //   printf ("select err\n");
+    //                    }
+ //  if (0 == r) {
+  //  fprintf (stderr, "select timeout\n");
+  //  exit (EXIT_FAILURE);
+   //                     }
+	//printf("read to send");
+	usleep(50);
+   if(read_frame ())
+  {
+    H264_Encode(nv12buffer,fp_h264);
+    rtpSend(pRtpSession,oinfo.StrmVirAddr,oinfo.dataSize);
+
+  }
+    
+
+
+} 
 
 }

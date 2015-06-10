@@ -11,10 +11,12 @@
 
 //#define SERVER_IP "192.168.1.100"
 //#define SERVER_IP "192.168.1.109"
+
 #define SERVER_IP "192.168.1.113"
 //#define SERVER_IP "192.168.1.111"
 
 #define UDP_PORT 14550
+#define RTP_PORT 3020
 
 bool flag_udp_init = false;
 struct sockaddr_in gc_addr, rc_addr;

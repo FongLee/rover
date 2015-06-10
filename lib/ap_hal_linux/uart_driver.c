@@ -5,16 +5,19 @@
 #include <string.h>
 #include "uart_driver.h"
 
-bool flag_uart_init = false;
-int fd_uart = -1;
 
-int uart_init(const char *serial)         //open uart and initialize the uart
+//int fd_uart = -1;
+int fd_gps = -1;
+int fd_ultr = -1;
+
+int uart_init(int *fd_uart, const char *serial,int baud)         //open uart and initialize the uart
 {	
-	int BAUDRATE;
+	//int BAUDRATE;
 	
 	struct termios oldtio,newtio;
-	//printf("\n");    
-	fd_uart = open(serial, O_RDWR | O_NOCTTY );
+	//printf("\n");   
+	int uartbiit[50] = {B115200,B9600,B19200,B4800,B2400,B1200}; 
+	*fd_uart = open(serial, O_RDWR | O_NOCTTY );
 	if( fd_uart <0)
 	{
 		//perror("error: can't open serial port!");
@@ -26,9 +29,9 @@ int uart_init(const char *serial)         //open uart and initialize the uart
 	//fprintf(stdout, "\nSerial port open successed!!!\n");
 	tcgetattr(fd_uart,&oldtio); //save current serial port settings
 	bzero(&newtio, sizeof(newtio)); // clear struct for new port settings
-	BAUDRATE = B115200;
-	cfsetispeed(&newtio,BAUDRATE);
-	cfsetospeed(&newtio,BAUDRATE);
+	//BAUDRATE = B115200;
+	cfsetispeed(&newtio,uartbiit[baud]);
+	cfsetospeed(&newtio,uartbiit[baud]);
 	// newtio.c_cflag |= CS8 | CLOCAL | CREAD;
 	// newtio.c_iflag = 0;
 	// newtio.c_oflag = 0;
@@ -60,7 +63,6 @@ int uart_init(const char *serial)         //open uart and initialize the uart
 	tcflush(fd_uart, TCIOFLUSH);
 	tcsetattr(fd_uart,TCSANOW,&newtio);
 	
-	flag_uart_init = true;	
 	//fprintf(stdout, "\nuart config successed!!!\n");
 	return 0;	
 }
@@ -80,9 +82,9 @@ int uart_init(const char *serial)         //open uart and initialize the uart
     Modification : Created function
 
 *****************************************************************************/
-void uart_close()
+void uart_close(int fd_uart)
 {
-	flag_uart_init = false;
+	
 	if (fd_uart != -1)
 	{
 		close(fd_uart);
@@ -91,13 +93,16 @@ void uart_close()
 	//return -1;	
 }
 
-int read_uart(char *buf, unsigned int n)
+int read_uart(int fd_uart, char *buf, unsigned int n)
 {
 	int len;
-	if (!flag_uart_init)
-	{
-		return -1;
-	}
 	len = read(fd_uart,buf,n);
+	return len;
+}
+
+int write_uart(int fd_uart, char *buf,unsigned int n)
+{
+	int len;
+	len=write(fd_uart,buf,n);
 	return len;
 }

@@ -17,6 +17,8 @@ extern bool set_servos_now;
 extern bool navigate;
 extern bool begin_control;
 
+extern bool read_ultrasonic_now;
+
 void timer_data_defaluts();
 void timer_update();
 

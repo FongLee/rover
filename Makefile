@@ -1,17 +1,21 @@
 #./install/rover
 .PHONY: all rover
 
+#before
 
-all:   rover
+all:  rover
+
 
 CC = arm-linux-gcc
 #-pg
 CFLAGS = -Wall -std=gnu99 -c -g
 #-pg -lefence -g -static
 LDFLAGS =
+
 #add  -DGPS_DEBUG -DUDP_DEBUG -DCOMMU_DEBUG -DMPU9150_DEBUG_ERROR
-# -DI2C_DEBUG -DMPU9150_DEBUG  -DKALMAN_DEBUG  -DAHRS_DEBUG -DMEMWATCH -DMEMWATCH_STDIO for debugging
-DEFS = -DEMPL_TARGET_LINUX -DMPU9150 -DAK8975_SECONDARY
+#-DI2C_DEBUG -DMPU9150_DEBUG  -DKALMAN_DEBUG  -DAHRS_DEBUG  -DMEMWATCH
+#-DMEMWATCH_STDIO -DULTRA_DEBUG for debugging
+DEFS = -DEMPL_TARGET_LINUX -DMPU9150 -DAK8975_SECONDARY -DGPS_DEBUG
 
 
 INSTALL_PATH = ./install
@@ -29,8 +33,11 @@ AHRSDIR = ./lib/ap_ahrs
 NMEADIR = ./lib/nmealib
 GPSDIR = ./lib/ap_gps
 CONTROLDIR = ./lib/ap_control
+CAMDIR = ./lib/camera
 MEMDIR= ./lib/memwatch
 FENCEDIR = ./lib/electric_fence
+ULRDIR=./lib/ap_ultrasonic
+ORTPDIR=./lib/ortp
 
 OBJS = $(SRCDIR)/communication.o \
 		$(SRCDIR)/settings.o \
@@ -56,20 +63,41 @@ OBJS = $(SRCDIR)/communication.o \
        	$(CONTROLDIR)/ap_control.o \
        	$(MATRIXDIR)/meschach.a \
        	$(NMEADIR)/lib/libnmea.a \
-       	$(MEMDIR)/memwatch.o \
+       	$(CAMDIR)/capture.o \
+       	$(CAMDIR)/Encoder.o \
+       	$(CAMDIR)/rtpsend.o \
+       	$(CAMDIR)/SsbSipMfcDecAPI.o \
+       	$(CAMDIR)/SsbSipMfcEncAPI.o \
+       	$(ULRDIR)/ap_ultrasonic.o\
+		$(MEMDIR)/memwatch.o \
+		#$(ORTPDIR)/lib/libortp.so
        	#$(FENCEDIR)/lib/libefence.a
        	#ap_ahrs.o \
-#change to -lpthread is incorrect -lrt
-LIBS = -pthread  -lm  -lrt -L $(FENCEDIR)/lib
+#change to -lpthread is incorrect -lrt  -lortp  
+LIBS = -pthread  -lm  -lrt -L $(FENCEDIR)/lib -L $(ORTPDIR)/lib  -lortp
+
 
 INCS = -I $(MAVLINKDIR) -I $(MAVLINKDIR2) -I $(SRCDIR)  -I $(HALDIR) \
 		-I $(IMUDIR)/eMPL -I $(IMUDIR)/mpu9150 -I $(IMUDIR) -I $(KALDIR) \
 		-I $(MATRIXDIR) -I $(MATHDIR) -I $(AHRSDIR) -I $(NMEADIR) \
 		-I $(NMEADIR)/include    -I $(GPSDIR) -I $(CONTROLDIR) \
+		-I $(CAMDIR)  -I $(ULRDIR) \
+		-I $(ORTPDIR)/include \
 		-I $(MEMDIR)
 
-before:
+#NOTE:need root authority, file path can not obtain chinese character
+
+empty:=
+space:=$(empty) $(empty)
+
+before: fence ortp
+
+fence:
 	cd $(FENCEDIR) && make  LIB_INSTALL_DIR=./lib MAN_INSTALL_DIR=./man  CC=arm-linux-gcc AR=arm-linux-ar install
+ortp:
+	cd $(ORTPDIR)/ortp-0.24.2 && \
+	./configure CC=arm-linux-gcc --prefix=$(subst $(space),\ ,$(shell cd $(ORTPDIR) ; pwd)) --host=arm-linux -target=arm-linux && \
+	make && make install
 
 rover: $(OBJS)
 	$(CC) $(INCS) $^    $(LDFLAGS) $(LIBS)  -o $@
@@ -87,8 +115,8 @@ $(NMEADIR)/lib/libnmea.a:
 $(FENCEDIR)/lib/libefence.a:
 	cd $(FENCEDIR) && make  LIB_INSTALL_DIR=./lib MAN_INSTALL_DIR=./man  CC=arm-linux-gcc AR=arm-linux-ar install
 
-install: test
-	mv test $(INSTALL_PATH)
+install: rover
+	mv rover $(INSTALL_PATH)
 clean:
 	rm -f $(OBJS)
 	cd $(MATRIXDIR) && make clean

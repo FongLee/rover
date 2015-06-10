@@ -14,7 +14,9 @@
 
 int fd_control = -1;
 bool flag_control_init = false;
-int flag_control_mode = 2;
+
+int flag_control_mode = 0;
+int flag_control_avoid;
 
 int channel_steer;
 int channel_throttle;

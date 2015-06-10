@@ -20,6 +20,8 @@ bool set_servos_now = false;
 bool navigate = false;
 bool begin_control = false;
 
+bool read_ultrasonic_now=false;
+
 enum
 {
 	TIMER_SYSTEM_STATE,
@@ -28,6 +30,8 @@ enum
 	TIMER_READ_IMU,
 	TIMER_READ_GPS,
 	TIMER_READ_LR,
+
+	TIMER_READ_ULTRASONIC,
 
 	NTIMERS
 } timer_state;
@@ -39,6 +43,9 @@ enum
 	PARAMS_COUNT = 100,
 	IMU_COUNT = 10,
 	GPS_COUNT = 100,
+
+	ULTRASONIC_COUNT=100,
+
 	LR_COUNT = 1000
 } timer_count;
 
@@ -61,6 +68,9 @@ void timer_data_defaluts()
 	timer_data.timer[TIMER_READ_IMU] = IMU_COUNT;
 
 	timer_data.timer[TIMER_READ_GPS] = GPS_COUNT;
+
+	timer_data.timer[TIMER_READ_ULTRASONIC]=ULTRASONIC_COUNT;
+
 
 	timer_data.timer[TIMER_READ_LR] = LR_COUNT;
 
@@ -111,4 +121,11 @@ void timer_update()
 		read_laser_range_now = true;
 		timer_data.timer[TIMER_READ_LR] = LR_COUNT;
 	}
+
+	if (timer_data.timer[TIMER_READ_ULTRASONIC] == 0)
+	{
+		read_ultrasonic_now  = true;
+		timer_data.timer[TIMER_READ_ULTRASONIC] = ULTRASONIC_COUNT;
+	}
+
 }
