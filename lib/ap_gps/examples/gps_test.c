@@ -20,7 +20,7 @@ int main()
 		//ground_location(&cur);
 		check_position();
 		fprintf(stdout, "last good update is  :%lu ms\n", last_good_update);
-		delay_ms(1000);
+		delay_ms(100);
 		fprintf(stdout, "gps_quality is :%d \n", gps_quality());
 		fprintf(stdout, "Operating mode is :%d \n", gps_op_mode());
 		//fprintf(stdout,"\ntime:%d,%d,%d,%d,%d,%d\n", beiJingTime.year+1900, beiJingTime.mon+1,beiJingTime.day,beiJingTime.hour,beiJingTime.min,beiJingTime.sec);

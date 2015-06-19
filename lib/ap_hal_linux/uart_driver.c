@@ -17,8 +17,9 @@ int uart_init(int *fd_uart, const char *serial,int baud)         //open uart and
 	struct termios oldtio,newtio;
 	//printf("\n");   
 	int uartbiit[50] = {B115200,B9600,B19200,B4800,B2400,B1200}; 
-	*fd_uart = open(serial, O_RDWR | O_NOCTTY );
-	if( fd_uart <0)
+	//*fd_uart = open(serial, O_RDWR | O_NOCTTY );
+	*fd_uart = open(serial, O_RDWR);
+	if( *fd_uart <0)
 	{
 		//perror("error: can't open serial port!");
 		//exit(1);
@@ -27,7 +28,7 @@ int uart_init(int *fd_uart, const char *serial,int baud)         //open uart and
 	//else 
 		//printf("Serial port open successed!!!\n");
 	//fprintf(stdout, "\nSerial port open successed!!!\n");
-	tcgetattr(fd_uart,&oldtio); //save current serial port settings
+	tcgetattr(*fd_uart,&oldtio); //save current serial port settings
 	bzero(&newtio, sizeof(newtio)); // clear struct for new port settings
 	//BAUDRATE = B115200;
 	cfsetispeed(&newtio,uartbiit[baud]);
@@ -60,8 +61,8 @@ int uart_init(int *fd_uart, const char *serial,int baud)         //open uart and
 	newtio.c_cc[VWERASE] = 0; /* Ctrl-w */
 	newtio.c_cc[VLNEXT] = 0; /* Ctrl-v */
 	newtio.c_cc[VEOL2] = 0; /* '\0' */
-	tcflush(fd_uart, TCIOFLUSH);
-	tcsetattr(fd_uart,TCSANOW,&newtio);
+	tcflush(*fd_uart, TCIOFLUSH);
+	tcsetattr(*fd_uart,TCSANOW,&newtio);
 	
 	//fprintf(stdout, "\nuart config successed!!!\n");
 	return 0;	

@@ -10,7 +10,7 @@
 
 //#define UART_DEVICE "/dev/ttySAC3"
 #define UART_DEVICE "/dev/ttySAC3"
-#define MAXBUF_UART 200
+#define MAXBUF_UART 500
 #define GPS_MIN_SPEED 3
 //#define GPS_DEBUG
 //struct location
@@ -30,11 +30,12 @@ float accel_max_cmss = 200;
 bool flag_gps_glitching = false;
 bool flag_gps_init = false;
 bool flag_gps = false;
+bool flag_gps_unconnect = false;
 
 int gps_init()
 {
 
-	if (uart_init(&fd_gps, UART_DEVICE,0) != 0)
+	if (uart_init(&fd_gps, UART_DEVICE,1) != 0)
 
 	{
 		return -1;
@@ -61,20 +62,27 @@ void gps_end()
 	nmea_parser_destroy(&parser);
 }
 
-void gps_parse()
+int  gps_parse()
 {
 	static char gps_buf[MAXBUF_UART];
-	static int len = 0;
+	int len = 0;
 	memset(gps_buf,0,MAXBUF_UART);
 	len = read_uart(fd_gps, gps_buf, MAXBUF_UART);
 //fprintf(stdout, "len is %d\n" , len);
 #ifdef 	GPS_DEBUG
+	char newbuf[MAXBUF_UART + 1];
+	memset(newbuf, 0, MAXBUF_UART + 1);
+	memcpy(newbuf, gps_buf, len);
+	newbuf[len] = '\0';
+
 	//gps_buf[len] = '\0';
 	fprintf(stdout, "read_uart length is %d\n" , len);
-	fprintf(stdout, "read_uart buf is %s\n" , gps_buf);
+	fprintf(stdout, "read_uart buf is %s\n" , newbuf);
 #endif
+	if ( len < 0)
+		return -1;
 
-	if ( len > 0)
+	else if ( len > 0)
 	{
 		nmea_parse(&parser, gps_buf, len, &info);
 		get_ms(&gps_timestamp);
@@ -96,6 +104,7 @@ void gps_parse()
 				fill_3d_velocity(gps_vel);
 			}
 		}
+		return 0;
 	}
 }
 

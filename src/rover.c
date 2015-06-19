@@ -16,6 +16,7 @@
 #include "ap_control.h"
 #include "ap_ultrasonic.h"
 #include "rtpsend.h"
+#include "tcp_driver.h"
 #ifdef MEMWATCH
 #include "memwatch.h"
 #endif
@@ -87,23 +88,13 @@ int main(int argc, char **argv)
 	pthread_t transfer_thread;
 	pthread_t read_imu_thread;
 	pthread_t read_gps_thread;
+	pthread_t read_lowsensor_thread;
 	pthread_t control_thread;
 
 	pthread_t camera_thread;
 	pthread_t ultrasonic_thread;
 
 	void *thread_result;
-
-	
-	if (communication_init(ip_addr) == 0)
-	{
-		flag_communication_init = true;
-		res = pthread_create(&transfer_thread, NULL, task_transfer, 0);
-		if (res != 0)
-		{
-			fprintf(stderr, "task:transfer failed:%s\n", strerror(errno));
-		}
-	}
 
 	if (mpu9150_init(i2c_bus_imu, sample_rate, yaw_mix_factor) == 0)
 	{
@@ -115,31 +106,42 @@ int main(int argc, char **argv)
 		}
 	}
 
-
-	if (gps_init() == 0)
+	if (gps_init() == 0 && control_init() == 0)
 	{
 		flag_gps_init = true;
-		res = pthread_create(&read_gps_thread, NULL, task_read_gps, 0);
-		if (res != 0)
-		{
-			fprintf(stderr, "task:read gps failed:%s\n", strerror(errno));
-		}
-	}
-
-
-
-	if (control_init() == 0)
-	{
 		flag_control_init = true;
-		res = pthread_create(&control_thread, NULL, task_control, 0);
+		res = pthread_create(&read_lowsensor_thread, NULL, read_lowsensor, 0);
 		if (res != 0)
 		{
-			fprintf(stderr, "task:control failed:%s\n", strerror(errno));
+			fprintf(stderr, "task:read_lowsensor failed:%s\n", strerror(errno));
 		}
 	}
 
 
+	// if (gps_init() == 0)
+	// {
+	// 	flag_gps_init = true;
+	// 	res = pthread_create(&read_gps_thread, NULL, task_read_gps, 0);
+	// 	if (res != 0)
+	// 	{
+	// 		fprintf(stderr, "task:read gps failed:%s\n", strerror(errno));
+	// 	}
+	// }
 
+
+
+	// if (control_init() == 0)
+	// {
+	// 	flag_control_init = true;
+	// 	res = pthread_create(&control_thread, NULL, task_control, 0);
+	// 	if (res != 0)
+	// 	{
+	// 		fprintf(stderr, "task:control failed:%s\n", strerror(errno));
+	// 	}
+	// }
+
+
+/*
  	if(camera_init(ip_addr)==0)
  	{
 
@@ -149,8 +151,8 @@ int main(int argc, char **argv)
 			fprintf(stderr, "task:camera failed:%s\n", strerror(errno));
 		}
  	}
-	
-	
+*/
+
  	if(ultrasonic_init()==0)
  	{
  		res = pthread_create(&ultrasonic_thread, NULL, task_read_ultrasonic, 0);
@@ -161,6 +163,28 @@ int main(int argc, char **argv)
  	}
 
 
+	if (communication_init(ip_addr) == 0)
+	{
+		flag_communication_init = true;
+		while(1)
+		{
+			delay_ms(1000);
+			if (tcp_accept() == 0)
+			{
+				res = pthread_create(&transfer_thread, NULL, task_transfer, 0);
+				if (res != 0)
+				{
+					fprintf(stderr, "task:transfer failed:%s\n", strerror(errno));
+				}
+
+			}
+			flag_communication_connect = flag_tcp_connect;
+
+		}
+
+
+
+	}
 
 
 	//while(main_done == 0)
@@ -170,7 +194,7 @@ int main(int argc, char **argv)
 
 
 
-	res = pthread_join(read_imu_thread, &thread_result);
+	//res = pthread_join(read_imu_thread, &thread_result);
 	return 0;
 }
 
@@ -192,6 +216,12 @@ int register_sig_handler()
 void sigint_main_handler(int sig)
 {
 	sigint_handler(sig);
+
+	//tcp_close();
+
+	//tcp_destroy();
+	delay_ms(1000);
+	exit(0);
 	main_done = 1;
 
 

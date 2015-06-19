@@ -16,11 +16,14 @@
 #include "ap_gps.h"
 #include "ap_control.h"
 #include "my_timer.h"
+#include "tcp_driver.h"
+
 
 mavlink_system_t mavlink_system;
 
 static uint32_t m_parameter_i = 0;
 bool flag_communication_init = false;
+bool flag_communication_connect = false;
 
 int communication_init(char *ip)
 {
@@ -28,7 +31,7 @@ int communication_init(char *ip)
 
 	mavlink_system.sysid = global_data.param[PARAM_SYSTEM_ID];
 	mavlink_system.compid = global_data.param[PARAM_COMPONENT_ID];
-	if (udp_init(ip) != 0)
+	if (tcp_init() != 0)
 	 	return -1;
 	else
 	{
@@ -193,7 +196,7 @@ void handle_mavlink_message(mavlink_channel_t chan, mavlink_message_t *msg)
 	}
 }
 
-void communication_receive(void)
+int communication_receive(void)
 {
 	mavlink_message_t msg;
 	mavlink_status_t status = {0};
@@ -201,11 +204,15 @@ void communication_receive(void)
 	int rec_size = 0;
 	uint8_t buf_receive[500];
 	memset(buf_receive, 0, 500);
-	rec_size = udp_receive(buf_receive, 500);
+	rec_size = tcp_receive(buf_receive, 500);
 
 	if (rec_size < 0)
 	{
-		return ;
+		return -1;
+	}
+	else if (rec_size == 0)
+	{
+		return 0;
 	}
 	else
 	{
@@ -222,7 +229,7 @@ void communication_receive(void)
 			}
 		}
 	}
-
+	return rec_size;
 }
 
 void mavlink_send_uart_bytes(mavlink_channel_t chan, const uint8_t *ch, uint16_t length)
@@ -230,7 +237,7 @@ void mavlink_send_uart_bytes(mavlink_channel_t chan, const uint8_t *ch, uint16_t
 	int send_size = 0;
 	if (chan == MAVLINK_COMM_0)
 	{
-		send_size = udp_send(ch, length);
+		send_size = tcp_send(ch, length);
 
 #ifdef COMMU_DEBUG
 		if (send_size < 0)

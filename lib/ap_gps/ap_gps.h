@@ -20,7 +20,7 @@ extern uint64_t gps_timestamp;
 extern struct location gps_loc;
 int gps_init();
 void gps_end();
-void gps_parse();
+int  gps_parse();
 int  gps_quality();
 float ground_speed();
 int gps_op_mode();

@@ -2,7 +2,7 @@
 #define COMMUNICATION_H
 
 bool flag_communication_init;
-
+bool flag_communication_connect;
 
 int communication_init(char *ip);
 void communication_system_state_send(void);

@@ -19,10 +19,11 @@
 
 void *task_transfer()
 {
-
 	while(1)
 	{
 		usleep(5000);
+		if(!flag_communication_connect)
+			break;
 		if (send_system_state_now)
 		{
 			send_system_state_now = false;
@@ -61,6 +62,7 @@ void *task_transfer()
 			communication_imu_send();
 		}
 	}
+	return;
 }
 
 void *task_read_imu()
@@ -155,12 +157,50 @@ void *task_read_imu()
 
 }
 
+void *read_lowsensor()
+{
+	int res;
+	while(1)
+	{
+		delay_ms(500);
+		res = gps_parse();
+		if (res == 0)
+		{
+			send_gps_now = true;
+		}
+
+		ultrasonic_read();
+
+#ifdef ULTRA_DEBUG
+			fprintf(stdout,"distance=%f\n",distance);
+#endif
+			if(distance>10000)
+			{
+				flag_control_avoid=2;//out of range or read value is zero
+			}
+			if(distance<2000&&distance>0)
+			{
+				flag_control_avoid=1;//very close
+			}
+			else
+			{
+				flag_control_avoid=0;
+			}
+			//uint64_t time1 = 0;
+			//get_us(&time1);
+			// fprintf(fp_dis, "distance=%f time=%ld\n",distance,time1);
+
+	}
+
+
+}
 void *task_read_gps()
 {
 
 	while(1)
 	{
-		usleep(10000);
+		//usleep(10000);
+		delay_ms(500);
 		if (read_gps_now)
 		{
 			read_gps_now = false;
@@ -183,9 +223,9 @@ void *task_control()
 			{
 				setting_moto(channel_throttle);
 
-				fprintf(stdout, "control mode is in the calibraton\n"); 
+				fprintf(stdout, "control mode is in the calibraton\n");
 			}
-			else 
+			else
 			{
 
 				if(flag_control_avoid==1)
@@ -194,14 +234,14 @@ void *task_control()
 					moto_control(1700, channel_steer);
 					else
 						moto_control(channel_throttle, channel_steer);
-					fprintf(stdout, "The distance is too close \n"); 
+					fprintf(stdout, "The distance is too close \n");
 				}
 
 				else
 
 					moto_control(channel_throttle, channel_steer);
 
-				fprintf(stdout, "control mode is in the control \n"); 
+				fprintf(stdout, "control mode is in the control \n");
 			}
 		}
 
@@ -219,9 +259,9 @@ void *task_read_ultrasonic()
 		if (read_ultrasonic_now)
 		{
 			read_ultrasonic_now = false;
-			
+
 			ultrasonic_read();
-			
+
 #ifdef ULTRA_DEBUG
 			fprintf(stdout,"distance=%f\n",distance);
 #endif
@@ -241,7 +281,7 @@ void *task_read_ultrasonic()
 			get_us(&time1);
 
 			// fprintf(fp_dis, "distance=%f time=%ld\n",distance,time1);
-		
+
 
 		}
 	}
@@ -283,9 +323,9 @@ while(1)
     rtpSend(pRtpSession,oinfo.StrmVirAddr,oinfo.dataSize);
 
   }
-    
 
 
-} 
+
+}
 
 }
