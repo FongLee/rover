@@ -10,13 +10,20 @@
 int fd_gps = -1;
 int fd_ultr = -1;
 
+/**
+ * uart initialize
+ * @param  fd_uart [description]
+ * @param  serial  [description]
+ * @param  baud    0: B115200; 1: B9600
+ * @return         0: success; -1: err
+ */
 int uart_init(int *fd_uart, const char *serial,int baud)         //open uart and initialize the uart
-{	
+{
 	//int BAUDRATE;
-	
+
 	struct termios oldtio,newtio;
-	//printf("\n");   
-	int uartbiit[50] = {B115200,B9600,B19200,B4800,B2400,B1200}; 
+	//printf("\n");
+	int uartbiit[50] = {B115200,B9600,B19200,B4800,B2400,B1200};
 	//*fd_uart = open(serial, O_RDWR | O_NOCTTY );
 	*fd_uart = open(serial, O_RDWR);
 	if( *fd_uart <0)
@@ -25,7 +32,7 @@ int uart_init(int *fd_uart, const char *serial,int baud)         //open uart and
 		//exit(1);
 		return -1;
 	}
-	//else 
+	//else
 		//printf("Serial port open successed!!!\n");
 	//fprintf(stdout, "\nSerial port open successed!!!\n");
 	tcgetattr(*fd_uart,&oldtio); //save current serial port settings
@@ -44,13 +51,13 @@ int uart_init(int *fd_uart, const char *serial,int baud)         //open uart and
 	newtio.c_cflag |= CS8 | CLOCAL | CREAD;//a character contained 8 bits,ignore the modem status line,enable the receiver
 	newtio.c_oflag &= ~(OPOST);//do not perform output processing
 
-	newtio.c_cc[VINTR] = 0; /* Ctrl-c*/ 
+	newtio.c_cc[VINTR] = 0; /* Ctrl-c*/
 	newtio.c_cc[VQUIT] = 0; /* Ctrl-\ */
 	newtio.c_cc[VERASE] = 0; /* del */
 	newtio.c_cc[VKILL] = 0; /* @ */
 	newtio.c_cc[VEOF] = 0; /* Ctrl-d */
 	newtio.c_cc[VTIME] = 0; /* inter-character timer unused */
-	newtio.c_cc[VMIN] = 0; /* blocking read until 1 characterarrives */
+	newtio.c_cc[VMIN] = 0; /*no blocking read characterarrives */
 	newtio.c_cc[VSWTC] = 0; /* '\0' */
 	newtio.c_cc[VSTART] = 0; /* Ctrl-q */
 	newtio.c_cc[VSTOP] = 0; /* Ctrl-s */
@@ -63,37 +70,32 @@ int uart_init(int *fd_uart, const char *serial,int baud)         //open uart and
 	newtio.c_cc[VEOL2] = 0; /* '\0' */
 	tcflush(*fd_uart, TCIOFLUSH);
 	tcsetattr(*fd_uart,TCSANOW,&newtio);
-	
-	//fprintf(stdout, "\nuart config successed!!!\n");
-	return 0;	
+
+	return 0;
 }
 
-/*****************************************************************************
- Prototype    : uart_close
- Description  : close uart4 
- Input        : None
- Output       : None
- Return Value : 
- Calls        : 
- Called By    : 
- 
-  History        :
-  1.Date         : 2014/11/7
-    Author       : xuanfeng
-    Modification : Created function
-
-*****************************************************************************/
-void uart_close(int fd_uart)
+/**
+ * close uart
+ * @param fd_uart [description]
+ */
+void uart_close(int *fd_uart)
 {
-	
-	if (fd_uart != -1)
+
+	if (*fd_uart != -1)
 	{
-		close(fd_uart);
-		fd_uart = -1;
-	}	
-	//return -1;	
+		close(*fd_uart);
+		*fd_uart = -1;
+	}
+	//return -1;
 }
 
+/**
+ * read characters from uart in noblocking ways
+ * @param  fd_uart [description]
+ * @param  buf     [description]
+ * @param  n       [description]
+ * @return         [description]
+ */
 int read_uart(int fd_uart, char *buf, unsigned int n)
 {
 	int len;
@@ -101,6 +103,13 @@ int read_uart(int fd_uart, char *buf, unsigned int n)
 	return len;
 }
 
+/**
+ * write characters from uart in noblocking ways
+ * @param  fd_uart [description]
+ * @param  buf     [description]
+ * @param  n       [description]
+ * @return         [description]
+ */
 int write_uart(int fd_uart, char *buf,unsigned int n)
 {
 	int len;

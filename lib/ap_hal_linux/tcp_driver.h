@@ -4,7 +4,8 @@
 
 bool flag_tcp_connect;
 
-int tcp_init();
+int tcp_init(void (*myhandler)(int num));
+
 int tcp_accept();
 void tcp_destroy();
 void tcp_close();

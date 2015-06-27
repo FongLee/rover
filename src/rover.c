@@ -24,10 +24,19 @@
 
 int register_sig_handler();
 
-void sigint_main_handler(int sig);
+void sig_main_handler(int sig);
 
 
 int main_done = 0;
+pthread_t transfer_thread;
+pthread_t read_imu_thread;
+pthread_t read_gps_thread;
+pthread_t read_lowsensor_thread;
+pthread_t control_thread;
+
+pthread_t camera_thread;
+pthread_t ultrasonic_thread;
+
 
 void usage(char *argv_0)
 {
@@ -85,14 +94,7 @@ int main(int argc, char **argv)
 	rover_init();
 
 	int res;
-	pthread_t transfer_thread;
-	pthread_t read_imu_thread;
-	pthread_t read_gps_thread;
-	pthread_t read_lowsensor_thread;
-	pthread_t control_thread;
 
-	pthread_t camera_thread;
-	pthread_t ultrasonic_thread;
 
 	void *thread_result;
 
@@ -106,40 +108,26 @@ int main(int argc, char **argv)
 		}
 	}
 
-	if (gps_init() == 0 && control_init() == 0)
+	if (gps_init() == 0 && ultrasonic_init()==0)
 	{
 		flag_gps_init = true;
 		flag_control_init = true;
-		res = pthread_create(&read_lowsensor_thread, NULL, read_lowsensor, 0);
+		res = pthread_create(&read_lowsensor_thread, NULL, task_read_lowsensor, 0);
 		if (res != 0)
 		{
 			fprintf(stderr, "task:read_lowsensor failed:%s\n", strerror(errno));
 		}
 	}
 
-
-	// if (gps_init() == 0)
-	// {
-	// 	flag_gps_init = true;
-	// 	res = pthread_create(&read_gps_thread, NULL, task_read_gps, 0);
-	// 	if (res != 0)
-	// 	{
-	// 		fprintf(stderr, "task:read gps failed:%s\n", strerror(errno));
-	// 	}
-	// }
-
-
-
-	// if (control_init() == 0)
-	// {
-	// 	flag_control_init = true;
-	// 	res = pthread_create(&control_thread, NULL, task_control, 0);
-	// 	if (res != 0)
-	// 	{
-	// 		fprintf(stderr, "task:control failed:%s\n", strerror(errno));
-	// 	}
-	// }
-
+	if (control_init() == 0)
+	{
+		flag_control_init = true;
+		res = pthread_create(&control_thread, NULL, task_control, 0);
+		if (res != 0)
+		{
+			fprintf(stderr, "task:control failed:%s\n", strerror(errno));
+		}
+	}
 
 /*
  	if(camera_init(ip_addr)==0)
@@ -153,59 +141,47 @@ int main(int argc, char **argv)
  	}
 */
 
- 	if(ultrasonic_init()==0)
- 	{
- 		res = pthread_create(&ultrasonic_thread, NULL, task_read_ultrasonic, 0);
-		if (res != 0)
-		{
-			fprintf(stderr, "task:ultrasonic failed:%s\n", strerror(errno));
-		}
- 	}
-
-
-	if (communication_init(ip_addr) == 0)
+	if (communication_init(sig_main_handler) == 0)
 	{
 		flag_communication_init = true;
 		while(1)
 		{
 			delay_ms(1000);
-			if (tcp_accept() == 0)
+
+			//only a connection can work
+			if (! flag_communication_connect  && (tcp_accept() == 0) )
 			{
+				flag_communication_connect = true;
+
 				res = pthread_create(&transfer_thread, NULL, task_transfer, 0);
 				if (res != 0)
 				{
 					fprintf(stderr, "task:transfer failed:%s\n", strerror(errno));
 				}
-
 			}
-			flag_communication_connect = flag_tcp_connect;
-
 		}
 
-
-
 	}
-
-
-	//while(main_done == 0)
-	//{
-		//sleep(1);
-	//}
-
-
-
-	//res = pthread_join(read_imu_thread, &thread_result);
 	return 0;
 }
 
+/**
+ * register signal handler function
+ * @return [description]
+ */
 int register_sig_handler()
 {
 	struct sigaction sia;
 
 	bzero(&sia, sizeof sia);
-	sia.sa_handler = sigint_main_handler;
+	sia.sa_handler = sig_main_handler;
 
 	if (sigaction(SIGINT, &sia, NULL) < 0) {
+		perror("sigaction(SIGINT)");
+		//exit(1);
+		return -1;
+	}
+	if (sigaction(SIGPIPE, &sia, NULL) < 0) {
 		perror("sigaction(SIGINT)");
 		//exit(1);
 		return -1;
@@ -213,17 +189,45 @@ int register_sig_handler()
 	return 0;
 }
 
-void sigint_main_handler(int sig)
+/**
+ * signal handler function
+ * @param sig [description]
+ */
+void sig_main_handler(int sig)
 {
-	sigint_handler(sig);
 
-	//tcp_close();
+	int res;
+	if (sig == SIGINT)
+	{
+		sigint_handler(sig);
 
-	//tcp_destroy();
-	delay_ms(1000);
-	exit(0);
-	main_done = 1;
+		//tcp_close();
 
+		//tcp_destroy();
+		delay_ms(1000);
+		exit(0);
+
+	}
+	//receive from tcp_receive function when connection is closed
+	if (sig == SIGUSR1)
+	{
+
+#ifdef SIG_DEBUG
+		fprintf(stdout, "get SIGUSR1 signal\n");
+#endif
+
+		res = pthread_cancel(transfer_thread);
+		if (res != 0)
+			fprintf(stderr, "pthread_cancel err: %s\n", strerror(errno));
+		flag_communication_connect = false;
+	}
+
+	if (sig == SIGPIPE)
+	{
+#ifdef SIG_DEBUG
+		fprintf(stdout, "get SIGPIPE signal\n");
+#endif
+	}
 
 }
 

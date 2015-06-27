@@ -1,7 +1,8 @@
 #ifndef MAVLINK_BRIDGE_HEADER_H
 #define MAVLINK_BRIDGE_HEADER_H
 
-
+//this file is a bridge between mavlink and others
+//it defines mavlink_send_uart_bytes function used to send bytes
 
 #define MAVLINK_USE_CONVENIENCE_FUNCTIONS
 

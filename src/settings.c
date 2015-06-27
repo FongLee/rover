@@ -7,7 +7,9 @@
 pthread_mutex_t lock_read_imu = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t ready_read_imu = PTHREAD_COND_INITIALIZER;
 
-
+/**
+ * set value of global parameters
+ */
 void global_data_reset_param_defaults(void)
 {
 	global_data.param[PARAM_SYSTEM_ID] = 81;

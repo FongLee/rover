@@ -129,7 +129,7 @@ int linux_get_ns(uint64_t *count)
 	return 0;
 }
 
-void delay_microseconds(uint64_t usec)
+void linux_delay_microseconds(uint64_t usec)
 {
 	struct timespec  ts;
 	ts.tv_sec = 0;

@@ -19,7 +19,14 @@ extern bool begin_control;
 
 extern bool read_ultrasonic_now;
 
+/**
+ * set kinds of timer
+ */
 void timer_data_defaluts();
+
+/**
+ * this function is called by timer upon timer expiration
+ */
 void timer_update();
 
 #endif

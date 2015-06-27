@@ -37,7 +37,9 @@ struct global_struct global_data;
 extern pthread_mutex_t lock_read_imu;
 extern pthread_cond_t ready_read_imu;
 
-
+/**
+ * set value of global parameters
+ */
 void global_data_reset_param_defaults(void);
 //void global_data_reset(void);
 

@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <pthread.h>
 
 #include "communication.h"
 #include "settings.h"
@@ -11,20 +12,34 @@
 #include "mpu9150.h"
 #include "ap_gps.h"
 #include "ap_control.h"
-
 #include "rtpsend.h"
 #include "ap_ultrasonic.h"
 #include "scheduler.h"
 
-
+/**
+ * transfer task
+ * @return [description]
+ */
 void *task_transfer()
 {
+
+	int res;
+
+	res = pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+	if (res != 0)
+		return (void *)-1;
+
+	res = pthread_detach(pthread_self());
+	if (res != 0)
+		return (void *)-1;
+
 	while(1)
 	{
 		usleep(5000);
 		if(!flag_communication_connect)
 			break;
-		if (send_system_state_now)
+
+		if (send_system_state_now && flag_communication_connect)
 		{
 			send_system_state_now = false;
 			if (global_data.param[PARAM_SYSTEM_SEND_STATE])
@@ -34,14 +49,14 @@ void *task_transfer()
 
 		}
 
-		if (send_params_now)
+		if (send_params_now && flag_communication_connect)
 		{
 			send_params_now = false;
 			communication_parameter_send();
 
 		}
 
-		if (send_gps_now)
+		if (send_gps_now && flag_communication_connect)
 		{
 			send_gps_now = false;
 			communication_gps_send();
@@ -49,24 +64,33 @@ void *task_transfer()
 
 		}
 
-		if (receive_now)
+		if (receive_now && flag_communication_connect)
 		{
 			receive_now = false;
 			communication_receive();
 
 		}
 
-		if (send_imu_now)
+		if (send_imu_now && flag_communication_connect)
 		{
 			send_imu_now = false;
 			communication_imu_send();
 		}
 	}
-	return;
+	return (void *) 0;
 }
 
+/**
+ * read imu task
+ * @return [description]
+ */
 void *task_read_imu()
 {
+	int res;
+	res = pthread_detach(pthread_self());
+	if (res != 0)
+		return (void *)-1;
+
 	uint32_t now;
 	int opt;
 	int verbose = 1;
@@ -100,6 +124,7 @@ void *task_read_imu()
 	{
 
 		usleep(5000);
+		//fprintf(stdout, "task_read_imu thread ID id %d", getpid());
 		if (mag_mode == 1)
 		{
 			fprintf(stdout, "mag start to calibration\n");
@@ -157,35 +182,49 @@ void *task_read_imu()
 
 }
 
-void *read_lowsensor()
+/**
+ * read low sensor task including GPS and ultrasonic distance measurement
+ * @return [description]
+ */
+void *task_read_lowsensor()
 {
 	int res;
+	res = pthread_detach(pthread_self());
+	if (res != 0)
+		return (void *)-1;
+	float distance;
+
 	while(1)
 	{
-		delay_ms(500);
+		delay_ms(50);
 		res = gps_parse();
 		if (res == 0)
 		{
 			send_gps_now = true;
 		}
 
-		ultrasonic_read();
+		res = ultrasonic_read(&distance);
+		if (res == 0)
+		{
+			if(distance > 10000)
+			{
+				flag_control_avoid = 2;//out of range or read value is zero
+			}
+			if(distance < 2000 && distance > 0)
+			{
+				flag_control_avoid = 1;//very close
+			}
+			else
+			{
+				flag_control_avoid= 0;
+			}
 
 #ifdef ULTRA_DEBUG
 			fprintf(stdout,"distance=%f\n",distance);
 #endif
-			if(distance>10000)
-			{
-				flag_control_avoid=2;//out of range or read value is zero
-			}
-			if(distance<2000&&distance>0)
-			{
-				flag_control_avoid=1;//very close
-			}
-			else
-			{
-				flag_control_avoid=0;
-			}
+		}
+
+
 			//uint64_t time1 = 0;
 			//get_us(&time1);
 			// fprintf(fp_dis, "distance=%f time=%ld\n",distance,time1);
@@ -194,8 +233,17 @@ void *read_lowsensor()
 
 
 }
+
+/**
+ * read gps task
+ * @return [description]
+ */
 void *task_read_gps()
 {
+	int res;
+	res = pthread_detach(pthread_self());
+	if (res != 0)
+		return (void *)-1;
 
 	while(1)
 	{
@@ -211,11 +259,20 @@ void *task_read_gps()
 	}
 }
 
+/**
+ * control throttle and steer task
+ * @return [description]
+ */
 void *task_control()
 {
+	int res;
+	res = pthread_detach(pthread_self());
+	if (res != 0)
+		return (void *)-1;
+
 	while(1)
 	{
-		usleep(10000);
+		delay_ms(10);
 		if (begin_control)
 		{
 			begin_control = false;
@@ -249,36 +306,48 @@ void *task_control()
 
 }
 
-
+/**
+ *  ultrasonic distance measure task
+ * @return [description]
+ */
 void *task_read_ultrasonic()
 {
 
+	int res;
+	res = pthread_detach(pthread_self());
+	if (res != 0)
+		return (void *)-1;
+	int distance;
 	while(1)
 	{
-		usleep(50);
+		delay_ms(50);
 		if (read_ultrasonic_now)
 		{
 			read_ultrasonic_now = false;
 
-			ultrasonic_read();
+			res = ultrasonic_read(&distance);
+			if (res == 0)
+			{
 
 #ifdef ULTRA_DEBUG
-			fprintf(stdout,"distance=%f\n",distance);
+				fprintf(stdout,"distance=%f\n",distance);
 #endif
-			if(distance>10000)
-			{
-				flag_control_avoid=2;//超量程或者是0
+				if(distance>10000)
+				{
+					flag_control_avoid=2;//超量程或者是0
+				}
+				if(distance<2000&&distance>0)
+				{
+					flag_control_avoid=1;//很近
+				}
+				else
+				{
+					flag_control_avoid=0;
+				}
 			}
-			if(distance<2000&&distance>0)
-			{
-				flag_control_avoid=1;//很近
-			}
-			else
-			{
-				flag_control_avoid=0;
-			}
-			uint64_t time1 = 0;
-			get_us(&time1);
+
+			// uint64_t time1 = 0;
+			// get_us(&time1);
 
 			// fprintf(fp_dis, "distance=%f time=%ld\n",distance,time1);
 
@@ -286,46 +355,29 @@ void *task_read_ultrasonic()
 		}
 	}
 }
+
+/**
+ * read video task
+ * @return [description]
+ */
 void *task_camera()
 {
-while(1)
-{
+	int res;
+	res = pthread_detach(pthread_self());
+	if (res != 0)
+		return (void *)-1;
 
-//这一段涉及到异步IO
+	while(1)
+	{
 
-  // fd_set fds;
-  // struct timeval tv;
- //  int r;
+		delay_us(50);
 
- //  FD_ZERO (&fds);//将指定的文件描述符集清空
- //  FD_SET (fd, &fds);//在文件描述符集合中增加一个新的文件描述符
+	  	if(read_frame ())
+	  	{
+			H264_Encode(nv12buffer,fp_h264);
+	    	rtpSend(pRtpSession,oinfo.StrmVirAddr,oinfo.dataSize);
 
-   /* Timeout. */
- //  tv.tv_sec = 2;
- //  tv.tv_usec = 0;
-
- //  r = select (fd + 1, &fds, NULL, NULL, &tv);//判断是否可读（即摄像头是否准备好），tv是定时
-
- //  if (-1 == r) {
- //   if (EINTR == errno)
-   //  continue;
- //   printf ("select err\n");
-    //                    }
- //  if (0 == r) {
-  //  fprintf (stderr, "select timeout\n");
-  //  exit (EXIT_FAILURE);
-   //                     }
-	//printf("read to send");
-	usleep(50);
-   if(read_frame ())
-  {
-    H264_Encode(nv12buffer,fp_h264);
-    rtpSend(pRtpSession,oinfo.StrmVirAddr,oinfo.dataSize);
-
-  }
-
-
-
-}
+	 	}
+	}
 
 }

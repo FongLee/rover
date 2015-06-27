@@ -6,6 +6,9 @@
 #include <sys/socket.h> //sendto socket
 #include <arpa/inet.h> //htons inet_addr inet_ntoa
 #include <netinet/in.h> //sockaddr_in
+#include <signal.h>
+#include <sys/types.h>
+
 //s#include <bits/fcntl.h>
 #include "tcp_driver.h"
 
@@ -24,7 +27,7 @@ int sock_tcp = -1;
 int new_sock_fd = -1;
 int sock_accept_tcp = -1;
 
-int tcp_init()
+int tcp_init(void (*myhandler)(int num))
 {
 
 	//int socket_fd;
@@ -40,6 +43,13 @@ int tcp_init()
 		return -1;
 	}
 
+	int res;
+	struct sigaction myact;
+	myact.sa_handler = myhandler;
+	res = sigaction(SIGUSR1, &myact, NULL);
+	if (res < 0)
+		return -1;
+	
 	struct sockaddr_in loc_addr;
 	memset(&loc_addr, 0, sizeof(loc_addr));
 	loc_addr.sin_family = AF_INET;
@@ -78,14 +88,15 @@ int tcp_accept()
 	new_sock_fd = accept(sock_tcp, (struct sockaddr *) &client_addr, &client_addr_length);
 	if (new_sock_fd < 0)
 	{
-		fprintf(stderr, "accept err : %s\n", strerror(errno));
+		//fprintf(stderr, "accept err : %s\n", strerror(errno));
 		//close(sock_tcp);
 		return -1;
 	}
 	sock_accept_tcp = new_sock_fd;
+	
 	if (-1 == fcntl(sock_accept_tcp, F_SETFL, O_NONBLOCK))
 	{
-		fprintf(stderr, "setting nonblocking err: %s \n", strerror(errno));
+		//fprintf(stderr, "setting nonblocking err: %s \n", strerror(errno));
 		close(sock_tcp);
 		return -1;
 	}
@@ -158,8 +169,9 @@ int tcp_receive(uint8_t *ch, uint16_t length)
 	}
 	else if (bytes_receive == 0)
 	{
+		kill(getpid(), SIGUSR1); 
 		tcp_close();
-
+		
 		return 0;
 	}
 #ifdef 	TCP_DEBUG

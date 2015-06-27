@@ -5,10 +5,12 @@
 #include "stdio.h"
 #include "errno.h"
 #include "string.h"
-float distance;
+//float distance;
 //FILE *fp_dis;
+
+
 int ultrasonic_init();
-int ultrasonic_read();
+int ultrasonic_read(float *distance);
 int ultrasonic_close();
 
 

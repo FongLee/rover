@@ -32,9 +32,14 @@ bool flag_gps_init = false;
 bool flag_gps = false;
 bool flag_gps_unconnect = false;
 
+/**
+ * gps initialization
+ * @return 0: success; -1: err
+ */
 int gps_init()
 {
 
+	//use rate in 9600
 	if (uart_init(&fd_gps, UART_DEVICE,1) != 0)
 
 	{
@@ -56,12 +61,21 @@ int gps_init()
 
 }
 
+/**
+ * close gps
+ */
 void gps_end()
 {
-	uart_close(fd_gps);
+	uart_close(&fd_gps);
+	v_free(last_good_vel);
+	v_free(gps_vel);
 	nmea_parser_destroy(&parser);
 }
 
+/**
+ * parse the data of gps
+ * @return 0: success; -1: err
+ */
 int  gps_parse()
 {
 	static char gps_buf[MAXBUF_UART];
@@ -95,8 +109,10 @@ int  gps_parse()
         fprintf(stdout, "speed:%f km/h\n", info.speed);
         fprintf(stdout, "direction:%f degree\n", info.direction);
 #endif
+		if (gps_op_mode() < NMEA_FIX_2D)
+			return -1;
 
-		if (gps_op_mode() >= NMEA_FIX_2D)
+		else if (gps_op_mode() >= NMEA_FIX_2D)
 		{
 			ground_location(&gps_loc);
 			if (ground_speed() >= GPS_MIN_SPEED)
@@ -108,33 +124,58 @@ int  gps_parse()
 	}
 }
 
+/**
+ * get quality gps
+ * @return [description]
+ */
 int  gps_quality()
 {
 	return info.sig;
 }
 
+/**
+ * get mode of gps
+ * @return [description]
+ */
 int gps_op_mode()
 {
 	return info.fix;
 }
-//speed in m/s
+
+
+/**
+ * get speed of obeject in m/s
+ * @return [description]
+ */
 float ground_speed()
 {
     return info.speed * 0.27778;	// k/h to m/s
 }
 
-//speed in cm/s
+
+/**
+ * get speed of obeject in cm/s
+ * @return [description]
+ */
 long ground_speed_cm()
 {
     return (long)(ground_speed() * 100);
 }
 
-//ground course in centidegrees
+
+/**
+ * get ground course in centidegrees
+ * @return [description]
+ */
 long ground_course_cd()
 {
 	return (long)(info.direction * 100);
 }
 
+/**
+ * get location of gps
+ * @param loc [description]
+ */
 void ground_location(struct location *loc)
 {
 	static long altitude = 0;
@@ -150,12 +191,19 @@ void ground_location(struct location *loc)
 	loc->lng = longitude;		//Longitude * 10**7
 }
 
-
+/**
+ * get satalite of gps
+ * @return [description]
+ */
 int num_sats()
 {
 	return info.satinfo.inuse;
 }
 
+/**
+ * get velocity in 3d of object
+ * @param v [description]
+ */
 void fill_3d_velocity(VEC *v)
 {
 	float  gps_heading = radians(ground_course_cd());
@@ -164,6 +212,9 @@ void fill_3d_velocity(VEC *v)
 	v->ve[2] = 0;
 }
 
+/**
+ * check positon of object
+ */
 void check_position()
 {
 	uint64_t now ;

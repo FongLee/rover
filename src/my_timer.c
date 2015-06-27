@@ -36,10 +36,11 @@ enum
 	NTIMERS
 } timer_state;
 
+//timer value initialization
 enum
 {
 	SYSTEM_STATE_COUNT = 1000,
-	RECEIVE_COUNT = 10, //10 
+	RECEIVE_COUNT = 10, //10
 	PARAMS_COUNT = 100,
 	IMU_COUNT = 10,
 	GPS_COUNT = 100,
@@ -56,7 +57,9 @@ struct
 
 } timer_data;
 
-
+/**
+ * set kinds of timer
+ */
 void timer_data_defaluts()
 {
 	timer_data.timer[TIMER_SYSTEM_STATE] = SYSTEM_STATE_COUNT;
@@ -76,6 +79,9 @@ void timer_data_defaluts()
 
 }
 
+/**
+ * this function is called by timer upon timer expiration
+ */
 void timer_update()
 {
 	unsigned i = 0;
@@ -106,7 +112,7 @@ void timer_update()
 		read_imu_now = true;
 		//pthread_mutex_unlock(&lock_read_imu);
 		//pthread_cond_signal(&ready_read_imu);
-		
+
 		timer_data.timer[TIMER_READ_IMU] = IMU_COUNT;
 	}
 

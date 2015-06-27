@@ -25,13 +25,17 @@ static uint32_t m_parameter_i = 0;
 bool flag_communication_init = false;
 bool flag_communication_connect = false;
 
-int communication_init(char *ip)
+/**
+ * [communication_init description]
+ * @return [description]
+ */
+int communication_init(void (*handler)(int num))
 {
 
 
 	mavlink_system.sysid = global_data.param[PARAM_SYSTEM_ID];
 	mavlink_system.compid = global_data.param[PARAM_COMPONENT_ID];
-	if (tcp_init() != 0)
+	if (tcp_init(handler) != 0)
 	 	return -1;
 	else
 	{
@@ -41,11 +45,17 @@ int communication_init(char *ip)
 
 }
 
+/**
+ * send system state
+ */
 void communication_system_state_send(void)
 {
 	mavlink_msg_heartbeat_send(MAVLINK_COMM_0, global_data.param[PARAM_SYSTEM_TYPE], global_data.param[PARAM_AUTOPILOT_TYPE], 0, 0, 0);
 }
 
+/**
+ * send parameter
+ */
 void communication_parameter_send(void)
 {
 	if (m_parameter_i < ONBOARD_PARAM_COUNT)
@@ -57,6 +67,9 @@ void communication_parameter_send(void)
 	}
 }
 
+/**
+ * send imu data
+ */
 void communication_imu_send()
 {
 	mavlink_msg_scaled_imu_send(MAVLINK_COMM_0,
@@ -76,6 +89,9 @@ void communication_imu_send()
 								mpu.fusedEuler[VEC3_Z], 65535, 65535, 65535);
 }
 
+/**
+ * send gps data
+ */
 void communication_gps_send()
 {
 
@@ -87,6 +103,11 @@ void communication_gps_send()
 
 }
 
+/**
+ * handle received mavlink message data
+ * @param chan MAVLINK_COMM_0
+ * @param msg  [description]
+ */
 void handle_mavlink_message(mavlink_channel_t chan, mavlink_message_t *msg)
 {
 	switch (msg->msgid)
@@ -178,11 +199,14 @@ void handle_mavlink_message(mavlink_channel_t chan, mavlink_message_t *msg)
 			if ((uint8_t) rc_channels_override.target_system == (uint8_t) global_data.param[PARAM_SYSTEM_ID]
 					&& (uint8_t) rc_channels_override.target_component == (uint8_t) global_data.param[PARAM_COMPONENT_ID])
 			{
+
+#ifdef CONTROL_DEBUG
 				fprintf(stdout, "\n");
 				fprintf(stdout, "RC channel 1: %d\n", rc_channels_override.chan1_raw);
 				fprintf(stdout, "RC channel 2: %d\n", rc_channels_override.chan2_raw);
 				fprintf(stdout, "RC channel 3: %d\n", rc_channels_override.chan3_raw);
 				fprintf(stdout, "RC channel 4: %d\n", rc_channels_override.chan4_raw);
+#endif
 				channel_throttle = rc_channels_override.chan3_raw;
 				channel_steer = rc_channels_override.chan4_raw;
 				begin_control = true;
@@ -196,6 +220,10 @@ void handle_mavlink_message(mavlink_channel_t chan, mavlink_message_t *msg)
 	}
 }
 
+/**
+ * receive message from computer or telephone
+ * @return  >0: receive buf's length; -1: err; 0: tcp is closed
+ */
 int communication_receive(void)
 {
 	mavlink_message_t msg;
@@ -232,6 +260,12 @@ int communication_receive(void)
 	return rec_size;
 }
 
+/**
+ * send message in mavlink protocol
+ * @param chan   [description]
+ * @param ch     [description]
+ * @param length [description]
+ */
 void mavlink_send_uart_bytes(mavlink_channel_t chan, const uint8_t *ch, uint16_t length)
 {
 	int send_size = 0;
