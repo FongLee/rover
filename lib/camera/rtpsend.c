@@ -193,7 +193,7 @@ RtpSession * rtpInit(char * ipStr,int port)
          printf("error rtpInit");    
          return 0;    
      }    
- fp_h264=fopen("test.h264","wb");
+ //fp_h264=fopen("test.h264","wb");
  fp_sdp=fopen("sdp.txt","wb");
  capture_init();
   if(!H264_Encode_init(fp_sdp))

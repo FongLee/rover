@@ -279,8 +279,9 @@ void *task_control()
 			if (flag_control_mode != 0 )
 			{
 				setting_moto(channel_throttle);
-
+#ifdef CONTROL_DEBUG
 				fprintf(stdout, "control mode is in the calibraton\n");
+#endif
 			}
 			else
 			{
@@ -291,14 +292,18 @@ void *task_control()
 					moto_control(1700, channel_steer);
 					else
 						moto_control(channel_throttle, channel_steer);
+#ifdef ULTRA_DEBUG
+
 					fprintf(stdout, "The distance is too close \n");
+#endif
 				}
 
 				else
 
 					moto_control(channel_throttle, channel_steer);
-
+#ifdef CONTROL_DEBUG
 				fprintf(stdout, "control mode is in the control \n");
+#endif
 			}
 		}
 
@@ -370,7 +375,7 @@ void *task_camera()
 	while(1)
 	{
 
-		delay_us(50);
+		//delay_us(50);
 
 	  	if(read_frame ())
 	  	{

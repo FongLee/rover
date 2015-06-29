@@ -129,18 +129,11 @@ int main(int argc, char **argv)
 		}
 	}
 
-/*
- 	if(camera_init(ip_addr)==0)
- 	{
 
- 		res = pthread_create(&camera_thread, NULL, task_camera, 0);
-		if (res != 0)
-		{
-			fprintf(stderr, "task:camera failed:%s\n", strerror(errno));
-		}
- 	}
-*/
 
+
+
+#ifdef TCP
 	if (communication_init(sig_main_handler) == 0)
 	{
 		flag_communication_init = true;
@@ -162,6 +155,36 @@ int main(int argc, char **argv)
 		}
 
 	}
+#endif
+
+#ifdef UDP
+	if (communication_init(ip_addr) == 0)
+	{
+		flag_communication_init = true;
+		flag_communication_connect = true;
+		res = pthread_create(&transfer_thread, NULL, task_transfer, 0);
+		if (res != 0)
+		{
+			fprintf(stderr, "task:transfer failed:%s\n", strerror(errno));
+		}
+	}
+	
+ 	if(camera_init(ip_addr)==0)
+ 	{
+
+ 		res = pthread_create(&camera_thread, NULL, task_camera, 0);
+		if (res != 0)
+		{
+			fprintf(stderr, "task:camera failed:%s\n", strerror(errno));
+		}
+ 	}
+
+	while(main_done == 0)
+	{
+		delay_ms(1000);
+	}
+#endif
+
 	return 0;
 }
 
@@ -205,6 +228,9 @@ void sig_main_handler(int sig)
 
 		//tcp_destroy();
 		delay_ms(1000);
+#ifdef UDP
+		main_done = 1;
+#endif
 		exit(0);
 
 	}

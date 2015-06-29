@@ -4,8 +4,6 @@
 #include <stdio.h>
 #include <errno.h>
 
-
-
 #include "mavlink_bridge_header.h"
 #include "mavlink.h"
 #include "settings.h"
@@ -25,6 +23,25 @@ static uint32_t m_parameter_i = 0;
 bool flag_communication_init = false;
 bool flag_communication_connect = false;
 
+#ifdef UDP
+int communication_init(char *ip)
+{
+
+
+	mavlink_system.sysid = global_data.param[PARAM_SYSTEM_ID];
+	mavlink_system.compid = global_data.param[PARAM_COMPONENT_ID];
+	if (udp_init(ip) != 0)
+	 	return -1;
+	else
+	{
+		//flag_communication_init = true;
+		return 0;
+	}
+
+}
+#endif
+
+#ifdef TCP
 /**
  * [communication_init description]
  * @return [description]
@@ -44,6 +61,7 @@ int communication_init(void (*handler)(int num))
 	}
 
 }
+#endif
 
 /**
  * send system state
@@ -232,7 +250,14 @@ int communication_receive(void)
 	int rec_size = 0;
 	uint8_t buf_receive[500];
 	memset(buf_receive, 0, 500);
+
+#ifdef TCP
 	rec_size = tcp_receive(buf_receive, 500);
+#endif
+
+#ifdef UDP
+	rec_size = udp_receive(buf_receive, 500);
+#endif
 
 	if (rec_size < 0)
 	{
@@ -271,7 +296,14 @@ void mavlink_send_uart_bytes(mavlink_channel_t chan, const uint8_t *ch, uint16_t
 	int send_size = 0;
 	if (chan == MAVLINK_COMM_0)
 	{
+
+#ifdef TCP
 		send_size = tcp_send(ch, length);
+#endif
+
+#ifdef UDP
+		send_size = udp_send(ch, length);
+#endif
 
 #ifdef COMMU_DEBUG
 		if (send_size < 0)

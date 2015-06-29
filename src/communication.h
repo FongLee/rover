@@ -4,11 +4,17 @@
 bool flag_communication_init;
 bool flag_communication_connect;
 
+#ifdef TCP
 /**
  * [communication_init description]
  * @return [description]
  */
 int communication_init(void (*handler)(int num));
+#endif
+
+#ifdef UDP
+int communication_init(char *ip);
+#endif
 
 /**
  * send system state
