@@ -5,7 +5,8 @@ FriendlyARM-Rover Unmanned Ground Vehicle (UGV) is an autonomous rover, based in
 We want to make the system have the functions as follows , being controlled by remote server, transfering videos to server, with ability of autonomous navigation  and route planning.The first two part has completed, The other two parts are under developing.
 
 ###How to use it?
-1. Calibrate nertial sensors 
+####Calibrate nertial sensors 
+At first, nertial sensors (acceleration and magnetic sensor)should be calibrated, beacause there are different errors in different places.Especially, magnetic sensor has a large error, which  is easily influenced by metal.
 
 ```shell
 #./ means the current directory of rover
@@ -23,14 +24,15 @@ make
 ./imcal -m
 
 ```
-2. Load driver 
+####Load driver 
+It is a driver of PWM in board to driver electronic speed controller.
 
 ```shell
 cd ./install
 insmod 210pwm.ko
 
 ```
-3. Compile the whole programe
+####Compile the whole programe
 
 ```shell
 cd ./
@@ -38,18 +40,19 @@ make
 
 ```
 
-4. Run the programe
+####Run the programe
+Before you run the whole system, calibration of electronic speed controller is necessary.Otherwise, The electronic speed controller don't know which pwm is high and low.
 
 ```shell
-#calibrate electronic speed controller
+#calibrate electronic speed controller first
 ./rover -c 
 
 ./rover -p [ip address of server]
 
 ```
 
-5. Configuration of base station
+####Configuration of base station
 
 
-6. How to get videos 
+####How to get videos 
 
