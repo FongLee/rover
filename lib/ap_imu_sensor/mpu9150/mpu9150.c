@@ -405,6 +405,7 @@ int mpu9150_read_dmp(mpudata_t *mpu)
 
 		return -1;
 	}
+	
 #ifdef MPU9150_DEBUG
 	fprintf(stdout, "sensors is %d\n", sensors);
 	fprintf(stdout, "more is %d\n", more);
@@ -417,13 +418,14 @@ int mpu9150_read_dmp(mpudata_t *mpu)
 			printf("dmp_read_fifo() failed\n");
 #endif
 
-
 			return -1;
 		}
+		
 #ifdef MPU9150_DEBUG
 	fprintf(stdout, "sensors is %d\n", sensors);
 	fprintf(stdout, "more is %d\n", more);
 #endif
+
 	}
 
 	return 0;

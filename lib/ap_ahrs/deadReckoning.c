@@ -1,23 +1,3 @@
-// This file is part of MatrixPilot.
-//
-//    http://code.google.com/p/gentlenav/
-//
-// Copyright 2009, 2010 MatrixPilot Team
-// See the AUTHORS.TXT file for a list of authors of MatrixPilot.
-//
-// MatrixPilot is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// MatrixPilot is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with MatrixPilot.  If not, see <http://www.gnu.org/licenses/>.
-
 
 #include "libDCM_internal.h"
 
@@ -64,7 +44,7 @@ void dead_reckon(void)
 		IMUvelocityy.WW += __builtin_mulss( ((int)(ACCEL2DELTAV)) ,  accelEarth[1] ) ;
 		IMUvelocityz.WW += __builtin_mulss( ((int)(ACCEL2DELTAV)) ,  accelEarth[2] ) ;
 
-		//	integrate IMU velocity to update the IMU location	
+		//	integrate IMU velocity to update the IMU location
 		IMUlocationx.WW += ( __builtin_mulss( ((int)(VELOCITY2LOCATION)) ,  IMUvelocityx._.W1 )>>4 ) ;
 		IMUlocationy.WW += ( __builtin_mulss( ((int)(VELOCITY2LOCATION)) ,  IMUvelocityy._.W1 )>>4 ) ;
 		IMUlocationz.WW += ( __builtin_mulss( ((int)(VELOCITY2LOCATION)) ,  IMUvelocityz._.W1 )>>4 ) ;
@@ -78,7 +58,7 @@ void dead_reckon(void)
 			IMUvelocityx.WW += __builtin_mulss( DR_FILTER_GAIN ,  velocityErrorEarth[0] ) ;
 			IMUvelocityy.WW += __builtin_mulss( DR_FILTER_GAIN ,  velocityErrorEarth[1] ) ;
 			IMUvelocityz.WW += __builtin_mulss( DR_FILTER_GAIN ,  velocityErrorEarth[2] ) ;
-	
+
 			IMUlocationx.WW += __builtin_mulss( DR_FILTER_GAIN ,  locationErrorEarth[0] ) ;
 			IMUlocationy.WW += __builtin_mulss( DR_FILTER_GAIN ,  locationErrorEarth[1] ) ;
 			IMUlocationz.WW += __builtin_mulss( DR_FILTER_GAIN ,  locationErrorEarth[2] ) ;
@@ -87,7 +67,7 @@ void dead_reckon(void)
 		{
 			errorYawground[0] = errorYawground[1] = errorYawground[2] = 0 ;
 		}
-	
+
 		if ( gps_nav_valid() && ( dcm_flags._.reckon_req == 1 ) )
 		{
 			//	compute error indications and restart the dead reckoning clock to apply them
@@ -106,7 +86,7 @@ void dead_reckon(void)
 		IMUvelocityx.WW = 0 ;
 		IMUvelocityy.WW = 0 ;
 		IMUvelocityz.WW = 0 ;
-	
+
 		IMUlocationx.WW = 0 ;
 		IMUlocationy.WW = 0 ;
 		IMUlocationz.WW = 0 ;

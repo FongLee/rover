@@ -1,4 +1,3 @@
-//#include <stdbool.h>
 #include <pthread.h>
 
 #include "scheduler.h"
@@ -108,11 +107,8 @@ void timer_update()
 
 	if (timer_data.timer[TIMER_READ_IMU] == 0)
 	{
-		//pthread_mutex_lock(&lock_read_imu);
-		read_imu_now = true;
-		//pthread_mutex_unlock(&lock_read_imu);
-		//pthread_cond_signal(&ready_read_imu);
 
+		read_imu_now = true;
 		timer_data.timer[TIMER_READ_IMU] = IMU_COUNT;
 	}
 

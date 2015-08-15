@@ -1,11 +1,25 @@
-FriendlyARM-Rover
+FriendlyARM-ROV
 ======
-FriendlyARM-Rover Unmanned Ground Vehicle (UGV) is an autonomous rover, based in the [FriendlyARM-210 board](http://www.friendlyarm.net/products/smart210).The configuration of the board are as follows, 1GHZ CPU , 512M RAM and 512M Nand Flash.The intelligence of the system comes from interfaces to a GPS sensor, a nertial sensor (mpu9150), a ultrasonic transducer of measuring distance, a USB camera, and a USB WiFi adapter for communication with a base station.The base station now uses [Mission Planner](http://ardupilot.com/downloads/?did=82). Our base station(C#) is under developing. 
+FriendlyARM-ROV is a Remotely-Operated Vehicle (ROV), based in the [FriendlyARM-210 board](http://www.friendlyarm.net/products/smart210).The configuration of the board are as follows, 1GHZ CPU , 512M RAM and 512M Nand Flash.The intelligence of the system comes from interfaces to a GPS sensor, a nertial sensor (mpu9150), a ultrasonic transducer of measuring distance, a USB camera, and a USB WiFi adapter for communication with a base station.The base station now uses [Mission Planner](http://ardupilot.com/downloads/?did=82). Our base station(C#) is under developing. 
 
-We want to make the system have the functions as follows , being controlled by remote server, transfering videos to server, with ability of autonomous navigation  and route planning.The first two part has completed, The other two parts are under developing.
+We want to make the system have the functions as follows: 
+- Being controlled by remote server
+- Transfering videos to server
+- With ability of autonomous navigation
+- Route planning
 
-###How to use it?
-####Calibrate nertial sensors 
+###Getting the source
+You can either download the source using the “ZIP” button at the top of the github page, or you can make a clone using git:
+
+```shell
+git@github.com:FongLee/rover.git
+```
+
+###Prerequisites
+####Ubuntu Linux
+To build FriendlyARM-ROV,you'll first need to install cross compilation tool chain of arm, you can download it from [Friendlyarm Official Website](http://www.friendlyarm.net/downloads).
+####Building using make
+#####Calibrate nertial sensors 
 At first, nertial sensors (acceleration and magnetic sensor)should be calibrated, beacause there are different errors in different places.Especially, magnetic sensor has a large error, which  is easily influenced by metal.
 
 ```shell
@@ -24,7 +38,7 @@ make
 ./imcal -m
 
 ```
-####Load driver 
+#####Load driver 
 It is a driver of PWM in board to driver electronic speed controller.
 
 ```shell
@@ -32,7 +46,7 @@ cd ./install
 insmod 210pwm.ko
 
 ```
-####Compile the whole programe
+#####Compile the whole programe
 
 ```shell
 cd ./
@@ -40,7 +54,7 @@ make
 
 ```
 
-####Run the programe
+###Usage of programe
 Before you run the whole system, calibration of electronic speed controller is necessary.Otherwise, The electronic speed controller don't know which pwm is high and low.
 
 ```shell
@@ -51,8 +65,4 @@ Before you run the whole system, calibration of electronic speed controller is n
 
 ```
 
-####Configuration of base station
-
-
-####How to get videos 
 

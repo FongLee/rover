@@ -52,11 +52,7 @@ int gps_init()
   	{
   		return -1;
   	}
-  	// if(pthread_mutex_init(&lock_nmea,NULL) != 0)
-  	// {
-   //  //exit(EXIT_FAILURE);
-   //  return -1;
-  	// }
+
     return 0;
 
 }
@@ -125,8 +121,9 @@ int  gps_parse()
 }
 
 /**
- * get quality gps
- * @return [description]
+ * get quality gps (0 = Invalid; 1 = Fix; 2 = Differential,
+ * 					3 = Sensitive)
+ * @return  quality indicator of gps
  */
 int  gps_quality()
 {
@@ -135,7 +132,7 @@ int  gps_quality()
 
 /**
  * get mode of gps
- * @return [description]
+ * @return mode of gps
  */
 int gps_op_mode()
 {
@@ -145,17 +142,16 @@ int gps_op_mode()
 
 /**
  * get speed of obeject in m/s
- * @return [description]
+ * @return speed of obeject
  */
 float ground_speed()
 {
     return info.speed * 0.27778;	// k/h to m/s
 }
 
-
 /**
  * get speed of obeject in cm/s
- * @return [description]
+ * @return speed of obeject
  */
 long ground_speed_cm()
 {
@@ -165,7 +161,7 @@ long ground_speed_cm()
 
 /**
  * get ground course in centidegrees
- * @return [description]
+ * @return ground course
  */
 long ground_course_cd()
 {
@@ -174,7 +170,7 @@ long ground_course_cd()
 
 /**
  * get location of gps
- * @param loc [description]
+ * @param loc location to return
  */
 void ground_location(struct location *loc)
 {
@@ -193,7 +189,7 @@ void ground_location(struct location *loc)
 
 /**
  * get satalite of gps
- * @return [description]
+ * @return number of satellite in use
  */
 int num_sats()
 {
@@ -202,7 +198,7 @@ int num_sats()
 
 /**
  * get velocity in 3d of object
- * @param v [description]
+ * @param v speed of vector
  */
 void fill_3d_velocity(VEC *v)
 {

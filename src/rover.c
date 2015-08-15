@@ -21,9 +21,16 @@
 #include "memwatch.h"
 #endif
 
-
+/**
+ * register signal handler function
+ * @return 0: seccess; -1: error
+ */
 int register_sig_handler();
 
+/**
+ * signal handler function
+ * @param sig signa number
+ */
 void sig_main_handler(int sig);
 
 
@@ -37,7 +44,10 @@ pthread_t control_thread;
 pthread_t camera_thread;
 pthread_t ultrasonic_thread;
 
-
+/**
+ * usage of programe
+ * @param argv_0 name of programe
+ */
 void usage(char *argv_0)
 {
 	fprintf(stdout, "usage: %s [iptions]\n", argv_0);
@@ -47,6 +57,10 @@ void usage(char *argv_0)
 	exit(1);
 }
 
+/**
+ * initialzaiton of rover
+ * @return 0: success
+ */
 int  rover_init()
 {
 	scheduler_init();
@@ -57,6 +71,13 @@ int  rover_init()
 	return 0;
 
 }
+
+/**
+ * main programe
+ * @param  argc
+ * @param  argv
+ * @return      0: success
+ */
 int main(int argc, char **argv)
 {
 	int opt;
@@ -129,10 +150,6 @@ int main(int argc, char **argv)
 		}
 	}
 
-
-
-
-
 #ifdef TCP
 	if (communication_init(sig_main_handler) == 0)
 	{
@@ -168,7 +185,7 @@ int main(int argc, char **argv)
 			fprintf(stderr, "task:transfer failed:%s\n", strerror(errno));
 		}
 	}
-	
+
  	if(camera_init(ip_addr)==0)
  	{
 
@@ -190,7 +207,7 @@ int main(int argc, char **argv)
 
 /**
  * register signal handler function
- * @return [description]
+ * @return 0: seccess; -1: error
  */
 int register_sig_handler()
 {
@@ -214,7 +231,7 @@ int register_sig_handler()
 
 /**
  * signal handler function
- * @param sig [description]
+ * @param sig signa number
  */
 void sig_main_handler(int sig)
 {

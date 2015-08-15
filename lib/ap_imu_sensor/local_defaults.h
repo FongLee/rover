@@ -5,7 +5,7 @@
 // To avoid having to pass the same command line switches when running
 // the test apps, you can specify the defaults for your platform here.
 
-// RPi I2C bus 
+
 #define DEFAULT_I2C_BUS 0
 
 // Gumstix Overo

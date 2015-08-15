@@ -17,13 +17,17 @@ int fd_ad = -1;
 bool flag_ad_init = false;
 uint32_t last_good_time_ad = 0;
 
+/**
+ * ad initialization
+ * @return 0: success; -1: error
+ */
 int ad_init()
 {
 	int channels[CHANNELCOUNT] = {0,1,4,5,6,7};
 	int channel_ad;
 	fd_ad= open("/dev/adc", 0);
 
-	if (fd_ad < 0) 
+	if (fd_ad < 0)
 	{
 		fprintf(stderr, "open ADC device err:%s\n", strerror(errno));
         return -1;
@@ -43,6 +47,9 @@ int ad_init()
     return 0;
 }
 
+/**
+ * close ad
+ */
 void ad_close()
 {
 	flag_ad_init = false;
@@ -53,6 +60,11 @@ void ad_close()
 	}
 }
 
+/**
+ * read voltage
+ * @param  ad_vol data
+ * @return        0: success; -1: error
+ */
 int read_ad_vol(float *ad_vol)
 {
 	uint32_t now;
@@ -79,12 +91,17 @@ int read_ad_vol(float *ad_vol)
 		last_good_time_ad = now;
 		return 0;
 	}
-	else 
+	else
 	{
 		return -1;
 	}
 }
 
+/**
+ * read value of ad
+ * @param  ad_value data
+ * @return          0: success; -1: error
+ */
 int read_ad_value(int *ad_value)
 {
 	uint32_t now;
@@ -103,11 +120,10 @@ int read_ad_value(int *ad_value)
 #ifdef AD_DEBUG
 		fprintf(stdout, "value of ad is:%d\n",  *ad_value);
 #endif
-		//*ad_value = ad_value * 3.3f / 4096.0f;
 		last_good_time_ad = now;
 		return 0;
 	}
-	else 
+	else
 	{
 		return -1;
 	}

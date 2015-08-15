@@ -6,13 +6,16 @@ bool flag_communication_connect;
 
 #ifdef TCP
 /**
- * [communication_init description]
- * @return [description]
- */
-int communication_init(void (*handler)(int num));
+ * communication initialization with tcp
+ * @return 0: success; -1: error
+ */ communication_init(void (*handler)(int num));
 #endif
 
 #ifdef UDP
+/**
+ * communication initialization with UDP
+ * @return 0: success; -1: error
+ */
 int communication_init(char *ip);
 #endif
 
@@ -41,9 +44,5 @@ void communication_gps_send();
  * @return  >0: receive buf's length; -1: err; 0: tcp is closed
  */
 void communication_receive(void);
-
-
-
-
 
 #endif

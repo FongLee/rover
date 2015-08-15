@@ -9,17 +9,12 @@
 #include <signal.h>
 #include <sys/types.h>
 
-//s#include <bits/fcntl.h>
 #include "tcp_driver.h"
-
-//#define SERVER_IP "192.168.1.100"
-//#define SERVER_IP "192.168.1.109"
 
 #define SERVER_IP "192.168.1.113"
 //#define SERVER_IP "192.168.1.111"
 
 #define TCP_PORT 5760
-//#define RTP_PORT 3020
 
 bool flag_tcp_init = false;
 bool flag_tcp_connect = false;
@@ -27,6 +22,9 @@ int sock_tcp = -1;
 int new_sock_fd = -1;
 int sock_accept_tcp = -1;
 
+/**
+ * tcp initialization
+ */
 int tcp_init(void (*myhandler)(int num))
 {
 
@@ -49,7 +47,7 @@ int tcp_init(void (*myhandler)(int num))
 	res = sigaction(SIGUSR1, &myact, NULL);
 	if (res < 0)
 		return -1;
-	
+
 	struct sockaddr_in loc_addr;
 	memset(&loc_addr, 0, sizeof(loc_addr));
 	loc_addr.sin_family = AF_INET;
@@ -80,6 +78,11 @@ int tcp_init(void (*myhandler)(int num))
 	return 0;
 }
 
+
+/**
+ * tcp accept
+ * @return 0: success; -1: error
+ */
 int tcp_accept()
 {
 
@@ -88,15 +91,12 @@ int tcp_accept()
 	new_sock_fd = accept(sock_tcp, (struct sockaddr *) &client_addr, &client_addr_length);
 	if (new_sock_fd < 0)
 	{
-		//fprintf(stderr, "accept err : %s\n", strerror(errno));
-		//close(sock_tcp);
 		return -1;
 	}
 	sock_accept_tcp = new_sock_fd;
-	
+
 	if (-1 == fcntl(sock_accept_tcp, F_SETFL, O_NONBLOCK))
 	{
-		//fprintf(stderr, "setting nonblocking err: %s \n", strerror(errno));
 		close(sock_tcp);
 		return -1;
 	}
@@ -110,6 +110,9 @@ int tcp_accept()
 	return 0;
 }
 
+/**
+ * close fd in listening
+ */
 void tcp_destroy()
 {
 	flag_tcp_init = false;
@@ -120,6 +123,9 @@ void tcp_destroy()
 	}
 }
 
+/**
+ * close fd of connection
+ */
 void tcp_close()
 {
 	flag_tcp_connect = false;
@@ -130,6 +136,12 @@ void tcp_close()
 	}
 }
 
+/**
+ * send data with tcp
+ * @param  ch     buffer
+ * @param  length length of buffer
+ * @return        0: success; -1: error
+ */
 int tcp_send(const uint8_t *ch, uint16_t length)
 {
 	if (ch == NULL || length < 0 )
@@ -157,6 +169,12 @@ int tcp_send(const uint8_t *ch, uint16_t length)
 	return length;
 }
 
+/**
+ * receive data with tcp
+ * @param  ch     buffer
+ * @param  length length of buffer
+ * @return        0: success; -1: error
+ */
 int tcp_receive(uint8_t *ch, uint16_t length)
 {
 	int16_t bytes_receive;
@@ -169,9 +187,9 @@ int tcp_receive(uint8_t *ch, uint16_t length)
 	}
 	else if (bytes_receive == 0)
 	{
-		kill(getpid(), SIGUSR1); 
+		kill(getpid(), SIGUSR1);
 		tcp_close();
-		
+
 		return 0;
 	}
 #ifdef 	TCP_DEBUG

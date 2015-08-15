@@ -9,109 +9,128 @@
 #define SOCKET_MALLOC_ERR	(SOCKET_BASE_ERR + 3)
 #define SOCKET_UNCOON_ERR		(SOCKET_BASE_ERR + 4)
 
+
+/**
+ * write buf into fd, untial all the buf is sended
+ * @param  fd    file descriptor to write
+ * @param  buf   buffer to write
+ * @param  count length of buffer
+ * @return       success: equal to count; err: less than count
+ */
+ssize_t writen(int fd, void *buf, size_t count);
+
+/**
+ * read buf from fd, until length of buf is count
+ * @param  fd    file descriptor to read
+ * @param  buf   buffer from reading
+ * @param  count count of buffer
+ * @return       read length : 0-count
+ */
+ ssize_t readn(int fd, void * buf, size_t count);
+
 /**
  * socket of client initialization
- * @param  sockhandle [description]
- * @param  contime    [description]
- * @param  sendtime   [description]
- * @param  revtime    [description]
- * @param  connum     [description]
- * @return            0: success; err: SOCKET_PAR_ERR SOCKET_MALLOC_ERR 
+ * @param  sockhandle sock handle structure
+ * @param  contime    maximum  of connect time (second)
+ * @param  sendtime   maximum  of send time (second)
+ * @param  revtime    maximum of receive time (second)
+ * @param  connum     maximum number of connect
+ * @return            0: success; >0: err, including SOCKET_PAR_ERR SOCKET_MALLOC_ERR
  */
 int clt_socket_init(void **sockhandle, int contime, int sendtime, int revtime);
 
 /**
- * build connection  
- * @param  sockhandle [description]
- * @param  ip         [description]
- * @param  port       [description]
- * @param  connfd     [description]
- * @return            0: success; err: SOCKET_BASE_ERR SOCKET_TIMEOUT_ERR
+ * build connection
+ * @param  sockhandle sock handle structure
+ * @param  ip         ip of server
+ * @param  port       port of server
+ * @param  connfd     file descriptor of connection
+ * @return            0: success; >0: err, including SOCKET_BASE_ERR SOCKET_TIMEOUT_ERR
  */
 int clt_socket_getcoon(void *sockhandle, char *ip, int port, int *connfd);
 
 /**
- * close fd
- * @param  connfd [description]
- * @return        [description]
+ * close fd of connection
+ * @param  connfd file descriptor of connection
+ * @return        0:success; >0: err, including SOCKET_PAR_ERR
  */
 int clt_socket_closeconn(int *connfd);
 
 /**
  * send buf
- * @param  sockhandle [description]
- * @param  connfd     [description]
- * @param  buf        [description]
- * @param  buflen     [description]
- * @return            0: success; err: SOCKET_MALLOC_ERR SOCKET_TIMEOUT_ERR SOCKET_BASE_ERR SOCKET_UNCOON_ERR
+ * @param  sockhandle sock handle structure
+ * @param  connfd     file descriptor of connection
+ * @param  buf        buffer to send
+ * @param  buflen     length of send buffer
+ * @return            0: success; >0: err,including SOCKET_MALLOC_ERR SOCKET_TIMEOUT_ERR SOCKET_BASE_ERR SOCKET_UNCOON_ERR
  */
 int clt_socket_send(void *sockhandle, int connfd, char *buf, int buflen);
 
 /**
- * receive buf (buflen long) 
- * @param  sockhandle [description]
- * @param  connfd     [description]
- * @param  buf        [description]
- * @param  buflen     the actual length of getting buf
- * @return            0: success; err: SOCKET_UNCOON_ERR SOCKET_TIMEOUT_ERR SOCKET_BASE_ERR
+ * receive buf (buflen long)
+ * @param  sockhandle sock handle structure
+ * @param  connfd     file descriptor of connection
+ * @param  buf        buffer to receive
+ * @param  buflen     the actual length of receiving buffer
+ * @return            0: success; >0: err,including SOCKET_UNCOON_ERR SOCKET_TIMEOUT_ERR SOCKET_BASE_ERR
  */
 int clt_socket_rev(void *sockhandle, int connfd, char *buf, int *buflen);
 /**
  * release sockhandle
- * @param  sockhandle [description]
- * @return            0: success;
+ * @param  sockhandle sock handle structure
+ * @return            0: success; >0: err,including SOCKET_PAR_ERR
  */
 int clt_socket_destory(void **sockhandle);
 
 /**
  * socket of server initialization
- * @param  listenfd  [description]
- * @param  listennum [description]
- * @param  port      [description]
- * @return           0: success; err: SOCKET_PAR_ERR SOCKET_MALLOC_ERR
+ * @param  listenfd  file descriptor of listenning connection
+ * @param  listennum number of listenning connection
+ * @param  port      listenning port of server
+ * @return           0: success; >0: err, including SOCKET_PAR_ERR SOCKET_MALLOC_ERR
  */
 int srv_socket_init(int *listenfd, int listennum, int port);
 
 /**
  * server accpet connection from client
- * @param  listenfd [description]
- * @param  connfd   [description]
- * @param  contime  [description]
- * @return          0: success; err: SOCKET_BASE_ERR SOCKET_TIMEOUT_ERR
+ * @param  listenfd file descriptor of listenning connection
+ * @param  connfd   file descriptor of connection
+ * @param  contime  maximum wating time of connecting to client (second)
+ * @return          0: success; >0: err, including SOCKET_BASE_ERR SOCKET_TIMEOUT_ERR
  */
 int srv_socket_accept(int listenfd, int *connfd, int contime);
 
 /**
  * server send buf
- * @param  connfd   [description]
- * @param  buf      [description]
- * @param  buflen   [description]
- * @param  sendtime [description]
- * @return          0: success; err: SOCKET_MALLOC_ERR SOCKET_TIMEOUT_ERR SOCKET_BASE_ERR SOCKET_UNCOON_ERR
+ * @param  connfd   file descriptor of connection
+ * @param  buf      buffer to send
+ * @param  buflen   length of send buffer
+ * @param  sendtime maximum waiting time of sending buffer (second)
+ * @return          0: success; >0: err,including SOCKET_MALLOC_ERR SOCKET_TIMEOUT_ERR SOCKET_BASE_ERR SOCKET_UNCOON_ERR
  */
 int srv_socket_send(int connfd, char *buf, int buflen, int sendtime);
 
 /**
  * server receive buf
- * @param  connfd  [description]
- * @param  buf     [description]
- * @param  buflen  [description]
- * @param  revtime [description]
- * @return         0: success; err: SOCKET_UNCOON_ERR SOCKET_TIMEOUT_ERR SOCKET_BASE_ERR
+ * @param  connfd  file descriptor of connection
+ * @param  buf     buffer to receive
+ * @param  buflen  the actual length of receiving buffer
+ * @param  revtime maximum waiting time of receiving buffer (second)
+ * @return         0: success; >0: err,including SOCKET_UNCOON_ERR SOCKET_TIMEOUT_ERR SOCKET_BASE_ERR
  */
 int srv_socket_rev(int connfd, char *buf, int *buflen, int revtime);
 
 /**
  * close connection fd of server
- * @param  connfd [description]
- * @return        0: success; err: SOCKET_PAR_ERR
+ * @param  connfd file descriptor of connection
+ * @return        0: success; >0, err, including SOCKET_PAR_ERR
  */
 int srv_socket_close(int *connfd);
 
 /**
- * close listening fd of server 
- * @param  listenfd [description]
- * @return          0: success; err: SOCKET_PAR_ERR
+ * close listening fd of server
+ * @param  listenfd file descriptor of listening
+ * @return          0: success; >0, err, including SOCKET_PAR_ERR
  */
 int srv_socket_destory(int *listenfd);
 

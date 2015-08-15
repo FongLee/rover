@@ -24,6 +24,10 @@ bool flag_communication_init = false;
 bool flag_communication_connect = false;
 
 #ifdef UDP
+/**
+ * communication initialization with UDP
+ * @return 0: success; -1: error
+ */
 int communication_init(char *ip)
 {
 
@@ -43,8 +47,8 @@ int communication_init(char *ip)
 
 #ifdef TCP
 /**
- * [communication_init description]
- * @return [description]
+ * communication initialization with tcp
+ * @return 0: success; -1: error
  */
 int communication_init(void (*handler)(int num))
 {
@@ -239,7 +243,7 @@ void handle_mavlink_message(mavlink_channel_t chan, mavlink_message_t *msg)
 }
 
 /**
- * receive message from computer or telephone
+ * receive message from computer
  * @return  >0: receive buf's length; -1: err; 0: tcp is closed
  */
 int communication_receive(void)
@@ -287,9 +291,9 @@ int communication_receive(void)
 
 /**
  * send message in mavlink protocol
- * @param chan   [description]
- * @param ch     [description]
- * @param length [description]
+ * @param chan   channel number
+ * @param ch     buffer
+ * @param length length of buffer
  */
 void mavlink_send_uart_bytes(mavlink_channel_t chan, const uint8_t *ch, uint16_t length)
 {

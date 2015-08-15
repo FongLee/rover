@@ -18,7 +18,7 @@
 
 /**
  * transfer task
- * @return [description]
+ * @return 0: success; -1: error
  */
 void *task_transfer()
 {
@@ -82,7 +82,7 @@ void *task_transfer()
 
 /**
  * read imu task
- * @return [description]
+ * @return 0: success; -1: error
  */
 void *task_read_imu()
 {
@@ -110,15 +110,6 @@ void *task_read_imu()
 		set_cal(0);
 		set_cal(1);
 	}
-
-	// if (accel_cal_file)
-	// {
-	// 	free(accel_cal_file);
-	// }
-	// if (mag_cal_file)
-	// {
-	// 	free(mag_cal_file);
-	// }
 
 	while(done == 0)
 	{
@@ -184,7 +175,7 @@ void *task_read_imu()
 
 /**
  * read low sensor task including GPS and ultrasonic distance measurement
- * @return [description]
+ * @return 0: success; -1: error
  */
 void *task_read_lowsensor()
 {
@@ -224,11 +215,6 @@ void *task_read_lowsensor()
 #endif
 		}
 
-
-			//uint64_t time1 = 0;
-			//get_us(&time1);
-			// fprintf(fp_dis, "distance=%f time=%ld\n",distance,time1);
-
 	}
 
 
@@ -236,7 +222,7 @@ void *task_read_lowsensor()
 
 /**
  * read gps task
- * @return [description]
+ * @return 0: success; -1: error
  */
 void *task_read_gps()
 {
@@ -261,7 +247,7 @@ void *task_read_gps()
 
 /**
  * control throttle and steer task
- * @return [description]
+ * @return 0: success; -1: error
  */
 void *task_control()
 {
@@ -313,7 +299,7 @@ void *task_control()
 
 /**
  *  ultrasonic distance measure task
- * @return [description]
+ * @return 0: success; -1: error
  */
 void *task_read_ultrasonic()
 {
@@ -339,23 +325,17 @@ void *task_read_ultrasonic()
 #endif
 				if(distance>10000)
 				{
-					flag_control_avoid=2;//超量程或者是0
+					flag_control_avoid=2;//exceed the range or zero
 				}
 				if(distance<2000&&distance>0)
 				{
-					flag_control_avoid=1;//很近
+					flag_control_avoid=1;//very close
 				}
 				else
 				{
 					flag_control_avoid=0;
 				}
 			}
-
-			// uint64_t time1 = 0;
-			// get_us(&time1);
-
-			// fprintf(fp_dis, "distance=%f time=%ld\n",distance,time1);
-
 
 		}
 	}
@@ -374,7 +354,6 @@ void *task_camera()
 
 	while(1)
 	{
-
 		//delay_us(50);
 
 	  	if(read_frame ())
