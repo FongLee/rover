@@ -4,10 +4,16 @@
 
 CC = arm-linux-gcc
 #CC = gcc
-CFLAGS = -Wall -fsingle-precision-constant -std=gnu99
+CFLAGS = -Wall -fsingle-precision-constant -std=gnu99 -g
+
+LDFLAGS = -g  -static
+
+LIBS = -pthread -lm -lrt
 
 # add -DI2C_DEBUG -DMPU9150_DEBUG  -DKALMAN_DEBUG  -DAHRS_DEBUG for debugging
-DEFS = -DEMPL_TARGET_LINUX -DMPU9150 -DAK8975_SECONDARY
+# add -DAHRS_APPLLY -DKALMAN_THREE_APPLLY -DKALMAN_APPLLY
+DEFS = -DEMPL_TARGET_LINUX -DMPU9150 -DAK8975_SECONDARY -DAHRS_APPLLY \
+
 
 EMPLDIR = ../eMPL
 HALDIR = ../../ap_hal_linux
@@ -16,6 +22,7 @@ KALDIR = ../../kalman
 MATRIXDIR = ../../mesch12b
 MATHDIR = ../../ap_math
 AHRSDIR = ../../ap_ahrs
+MEMDIR= ../../memwatch
 
 OBJS = inv_mpu.o \
        inv_mpu_dmp_motion_driver.o \
@@ -27,27 +34,28 @@ OBJS = inv_mpu.o \
        kalman.o \
        matrix_kalman.o \
        ap_ahrs.o \
+       MahonyAHRS.o \
        ap_math.o \
        mpu_calibration.o \
        $(MATRIXDIR)/meschach.a \
-
+		$(MEMDIR)/memwatch.o
 
 INCS = -I ../ -I $(EMPLDIR) -I $(HALDIR) -I $(MPUDIR) \
 		-I $(KALDIR) -I $(MATRIXDIR) -I $(MATHDIR) \
-		-I $(AHRSDIR)
+		-I $(AHRSDIR) -I $(MEMDIR)
 
 .PHONY: all imu imucal cal_test
 
 all: imu imucal cal_test
 
 imu: $(OBJS) imu.o
-	$(CC) $(CFLAGS) imu.o $(OBJS)  -lm -lrt -o $@
+	$(CC) $(CFLAGS) imu.o $(OBJS) $(LDFLAGS) $(LIBS) -o $@
 
 imucal: $(OBJS) imucal.o
-	$(CC) $(CFLAGS) $(OBJS) imucal.o -lm -lrt   -o $@
+	$(CC) $(CFLAGS) $(OBJS) imucal.o  $(LDFLAGS) $(LIBS) -o $@
 
 cal_test: $(OBJS) test_cal.o
-	$(CC) $(CFLAGS)  test_cal.o $(OBJS) -lm -lrt -o $@
+	$(CC) $(CFLAGS)  test_cal.o $(OBJS)  $(LDFLAGS) $(LIBS) -o $@
 
 imu.o: imu.c
 	$(CC) $(CFLAGS) $(INCS)  $(DEFS)  -c $<
@@ -86,9 +94,12 @@ matrix_kalman.o: $(KALDIR)/matrix_kalman.c
 	$(CC) $(CFLAGS) $(DEFS) $(INCS) -c $<
 
 $(MATRIXDIR)/meschach.a:
-	cd $(MATRIXDIR) && make
+	cd $(MATRIXDIR) && make CC=arm-linux-gcc CFLAGS='-O -g'
 
 ap_ahrs.o: $(AHRSDIR)/ap_ahrs.c
+	$(CC) $(CFLAGS) $(DEFS) $(INCS) -c $<
+
+MahonyAHRS.o: $(AHRSDIR)/MahonyAHRS.c
 	$(CC) $(CFLAGS) $(DEFS) $(INCS) -c $<
 
 ap_math.o: $(MATHDIR)/ap_math.c
@@ -102,4 +113,4 @@ kbhit.o: $(HALDIR)/kbhit.c
 
 clean:
 	rm -f *.o imu imucal cal_test
-	cd $(MATRIXDIR) && make clean
+	#cd $(MATRIXDIR) && make clean

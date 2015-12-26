@@ -185,7 +185,7 @@ int main(int argc, char **argv)
 			fprintf(stderr, "task:transfer failed:%s\n", strerror(errno));
 		}
 	}
-
+/*
  	if(camera_init(ip_addr)==0)
  	{
 
@@ -195,12 +195,15 @@ int main(int argc, char **argv)
 			fprintf(stderr, "task:camera failed:%s\n", strerror(errno));
 		}
  	}
+*/
+
+#endif
 
 	while(main_done == 0)
 	{
 		delay_ms(1000);
 	}
-#endif
+
 
 	return 0;
 }

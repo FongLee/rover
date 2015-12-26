@@ -1,3 +1,28 @@
+////////////////////////////////////////////////////////////////////////////
+//
+//  This file is part of linux-mpu9150
+//
+//  Copyright (c) 2013 Pansenti, LLC
+//
+//  Permission is hereby granted, free of charge, to any person obtaining a copy of
+//  this software and associated documentation files (the "Software"), to deal in
+//  the Software without restriction, including without limitation the rights to use,
+//  copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the
+//  Software, and to permit persons to whom the Software is furnished to do so,
+//  subject to the following conditions:
+//
+//  The above copyright notice and this permission notice shall be included in all
+//  copies or substantial portions of the Software.
+//
+//  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+//  INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+//  PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+//  HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+//  OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+//  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+// Date			Author			Notes
+// 17/12/2015     FinnickLee     	change
 
 #include <stdio.h>
 #include <string.h>
@@ -22,11 +47,19 @@
 #include "ap_math.h"
 #include "scheduler.h"
 #include "ap_ahrs.h"
+#include "ekf.h"
 
 #ifdef MEMWATCH
 #include "memwatch.h"
 #endif
 
+#define GRO_FACTOR 	16.38
+#define Q_ANGLE 	0.001
+#define Q_BIAS 		0.003
+//#define Q_QUAT 		0.1
+#define Q_QUAT 		0.01
+#define R_ACCEL 	0.3
+#define R_MAG 		3.0
 
 int kalman_init(void);
 static int data_ready();
@@ -38,7 +71,10 @@ static unsigned short inv_orientation_matrix_to_scalar(const signed char *mtx);
 static void run_self_test(void);
 
 int data_fusion_kalman(mpudata_t *mpu);
-int data_fusion_kalman2(mpudata_t *mpu);
+int data_fusion_kalman_three(mpudata_t *mpu);
+int data_fusion_kalman_three_improve(mpudata_t *mpu);
+int data_fusion_ekf(mpudata_t *mpu);
+
 
 int debug_on;
 int yaw_mixing_factor;
@@ -50,16 +86,17 @@ int use_mag_cal;
 caldata_t mag_cal_data;
 
 kalman_t *f_yaw;
+kalman_t *kalman_three_dim;
+ekf_t 	*kalman_ekf;
 
 #define DELT_T 			0.01
 
-uint64_t last_mag_time;
-bool mag_time_init = false;
+
 
 
 /**
  * kalman apply in yaw estimate
- * @return  [description]
+ * @return  0:success
  */
 int kalman_init(void)
 {
@@ -69,21 +106,22 @@ int kalman_init(void)
 				1.0,  	-DELT_T,
 				0.0, 		1.0);
 	set_matrix(f_yaw->control_input_model, (double)DELT_T, 0.0);
-	//set_matrix(f_yaw->control_input_model, 0.01, 0.0);
 	set_matrix(f_yaw->measure_model, 1.0, 0.0);
 
 	set_matrix(f_yaw->process_noise_covariance,
-				0.001, 	0.0,
-				0.0, 		0.003);
+				Q_ANGLE, 	0.0,
+				0.0, 		Q_BIAS);
 	//set_matrix(f_yaw->process_noise_covariance,
 	//			0.00001, 	0.0,
 	//			0.0, 		0.00003);
 	// set_matrix(f_yaw->process_noise_covariance,
 	//  			10.0, 	0.0,
 	//  			0.0, 		10.0);
-	set_matrix(f_yaw->measure_noise_covariance, 0.2);
-	//set_matrix(f_yaw->measure_noise_covariance, 50.0);
+
 	//set_matrix(f_yaw->measure_noise_covariance, 0.03);
+	set_matrix(f_yaw->measure_noise_covariance, R_MAG);
+	//set_matrix(f_yaw->measure_noise_covariance, 50.0);
+
 
 	float deviation = 1000.0;
 	set_matrix(f_yaw->state_estimate, 0.0, 0.0);
@@ -94,61 +132,91 @@ int kalman_init(void)
 }
 
 /**
- * kalman apply in euler
- * @return  [description]
+ * kalman apply in euler(three-dimensional)
+ * @return  0:success
  */
-int kalman_init2(void)
+int kalman_init_three(void)
 {
-	alloc_kalman_filter(&f_yaw, 6, 3, 3);
+	alloc_kalman_filter(&kalman_three_dim, 6, 3, 3);
 
-	set_matrix(f_yaw->state_transition,
-				1.0, 	-DELT_T, 0.0, 0.0, 0.0, 0.0,
-				0.0, 	1.0, 		 0.0, 0.0, 0.0, 0.0,
-				0.0, 0.0, 1.0, -DELT_T, 0.0, 0.0,
-				0.0 ,0.0, 0.0, 1.0, 0.0 ,0.0,
-				0.0, 0.0, 0.0, 0.0, 1.0, -DELT_T,
-				0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
-	set_matrix(f_yaw->control_input_model, DELT_T, 0.0, 0.0,
-											0.0, 0.0, 0.0,
-											0.0, DELT_T, 0.0,
-											0.0, 0.0, 0.0,
-											0.0, 0.0, DELT_T,
-											0.0, 0.0, 0.0);
-	//set_matrix(f_yaw->control_input_model, 0.01, 0.0);
-	set_matrix(f_yaw->measure_model, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-										0.0, 0.0, 1.0, 0.0, 0.0, 0.0,
-										0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
+	set_matrix(kalman_three_dim->state_transition,
+				1.0, -DELT_T,	0.0, 0.0, 		0.0, 0.0,
+				0.0, 1.0, 		0.0, 0.0, 		0.0, 0.0,
+				0.0, 0.0, 		1.0, -DELT_T, 	0.0, 0.0,
+				0.0 ,0.0, 		0.0, 1.0, 		0.0, 0.0,
+				0.0, 0.0, 		0.0, 0.0, 		1.0, -DELT_T,
+				0.0, 0.0, 		0.0, 0.0, 		0.0, 1.0);
+	set_matrix(kalman_three_dim->control_input_model,
+				DELT_T,	0.0, 	0.0,
+				0.0, 	0.0, 	0.0,
+				0.0, 	DELT_T,	0.0,
+				0.0, 	0.0, 	0.0,
+				0.0, 	0.0, 	DELT_T,
+				0.0, 	0.0, 	0.0);
+	set_matrix(kalman_three_dim->measure_model,
+				1.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+				0.0, 0.0, 1.0, 0.0, 0.0, 0.0,
+				0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
 
-	set_matrix(f_yaw->process_noise_covariance,
-				0.001, 0.0, 0.0, 0.0, 0.0, 0.0,
-				0.0, 0.003, 0.0, 0.0, 0.0, 0.0,
-				0.0, 0.0, 0.001, 0.0, 0.0, 0.0,
-				0.0, 0.0, 0.0, 0.003, 0.0, 0.0,
-				0.0, 0.0, 0.0, 0.0, 0.001, 0.0,
-				0.0, 0.0, 0.0, 0.0, 0.0, 0.003);
-	//set_matrix(f_yaw->process_noise_covariance,
-	//			0.00001, 	0.0,
-	//			0.0, 		0.00003);
-	// set_matrix(f_yaw->process_noise_covariance,
-	//  			10.0, 	0.0,
-	//  			0.0, 		10.0);
-	set_matrix(f_yaw->measure_noise_covariance, 0.2, 0.0, 0.0,
-												0.0, 0.2, 0.0,
-												0.0, 0.0, 0.2);
-	//set_matrix(f_yaw->measure_noise_covariance, 50.0);
-	//set_matrix(f_yaw->measure_noise_covariance, 0.03);
+	set_matrix(kalman_three_dim->process_noise_covariance,
+				Q_ANGLE,0.0,	0.0,	0.0, 	0.0, 	0.0,
+				0.0,	Q_BIAS,	0.0, 	0.0, 	0.0, 	0.0,
+				0.0, 	0.0, 	Q_ANGLE,0.0, 	0.0, 	0.0,
+				0.0, 	0.0, 	0.0, 	Q_BIAS,	0.0, 	0.0,
+				0.0, 	0.0, 	0.0, 	0.0, 	Q_ANGLE,0.0,
+				0.0, 	0.0, 	0.0, 	0.0, 	0.0,	Q_BIAS);
+	sm_mlt(DELT_T, kalman_three_dim->process_noise_covariance, kalman_three_dim->process_noise_covariance);
+
+	//set_matrix(kalman_three_dim->measure_noise_covariance,
+	//			0.03, 0.0, 0.0,
+	//			0.0, 0.03, 0.0,
+	//			0.0, 0.0, 0.03);
+	set_matrix(kalman_three_dim->measure_noise_covariance,
+				R_ACCEL,0.0, 		0.0,
+				0.0, 	R_ACCEL, 	0.0,
+				0.0, 	0.0, 		R_MAG);
 
 	float deviation = 1000.0;
-	set_matrix(f_yaw->state_estimate, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
-	m_ident(f_yaw->covariance_estimate);
-	sm_mlt(deviation * deviation, f_yaw->covariance_estimate, f_yaw->covariance_estimate);
+	set_matrix(kalman_three_dim->state_estimate,
+					0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+	//unit matrix
+	m_ident(kalman_three_dim->covariance_estimate);
+	sm_mlt(deviation * deviation, kalman_three_dim->covariance_estimate, kalman_three_dim->covariance_estimate);
 
 	return 0;
 }
 
+int ekf_init(void)
+{
+	alloc_ekf_filter(&kalman_ekf, 4, 6, 3);
+	set_matrix(kalman_ekf->process_noise_covariance,
+				Q_QUAT,	0.0,	0.0,	0.0,
+				0.0,	Q_QUAT,	0.0, 	0.0,
+				0.0, 	0.0, 	Q_QUAT,	0.0,
+				0.0, 	0.0, 	0.0, 	Q_QUAT);
+	sm_mlt(DELT_T, kalman_ekf->process_noise_covariance, kalman_ekf->process_noise_covariance);
+	set_matrix(kalman_ekf->measure_noise_covariance,
+				R_ACCEL,0.0,	0.0, 	0.0,	0.0,	0.0,
+				0.0,	R_ACCEL,0.0,	0.0,	0.0,	0.0,
+				0.0, 	0.0, 	R_ACCEL,0.0,	0.0,	0.0,
+				0.0,	0.0,	0.0,	R_MAG,	0.0,	0.0,
+				0.0,	0.0, 	0.0,	0.0, 	R_MAG, 	0.0,
+				0.0, 	0.0, 	0.0, 	0.0, 	0.0,	R_MAG);
+
+	float deviation = 1000.0;
+	set_matrix(kalman_ekf->state_estimate,
+					0.0, 0.0, 0.0, 0.0);
+	//unit matrix
+	m_ident(kalman_ekf->covariance_estimate);
+	sm_mlt(deviation * deviation, kalman_ekf->covariance_estimate, kalman_ekf->covariance_estimate);
+
+	return 0;
+	
+}
+
 /**
  * verify whether print calibration of accelerometer and gyroscope
- * @param on [description]
+ * @param on 1: print; 0: no print
  */
 void mpu9150_set_debug(int on)
 {
@@ -260,7 +328,7 @@ int mpu9150_init(int i2c_bus, int sample_rate, int mix_factor)
 		printf("\ndmp_set_fifo_rate() failed\n");
 		return -1;
 	}
-
+	//test in it self
 	// printf(".");
 	// fflush(stdout);
 	// run_self_test();
@@ -276,8 +344,14 @@ int mpu9150_init(int i2c_bus, int sample_rate, int mix_factor)
 	printf(".");
 	fflush(stdout);
 
+#ifdef 	KALMAN_THREE_APPLLY
+	kalman_init_three();
+#elif 	KALMAN_APPLLY
 	kalman_init();
-	//kalman_init2();
+#elif 	EKF_APPLLY
+	ekf_init();
+#endif
+
 	printf(" done\n\n");
 
 	return 0;
@@ -285,11 +359,12 @@ int mpu9150_init(int i2c_bus, int sample_rate, int mix_factor)
 
 void mpu9150_exit()
 {
+	// turn off the DMP on exit
+		if (mpu_set_dmp_state(0))
+			printf("mpu_set_dmp_state(0) failed\n");
+
 	//free memory of kalman filter
 	free_kalman_filter(&f_yaw);
-	// turn off the DMP on exit
-	if (mpu_set_dmp_state(0))
-		printf("mpu_set_dmp_state(0) failed\n");
 
 	// TODO: Should turn off the sensors too
 }
@@ -298,7 +373,7 @@ void mpu9150_exit()
 void run_self_test(void)
 {
     int result;
-//  char test_packet[4] = {0};
+	// char test_packet[4] = {0};
     long gyro[3], accel[3];
 	//
     result = mpu_run_self_test(gyro, accel);
@@ -333,7 +408,7 @@ void run_self_test(void)
         dmp_set_accel_bias(accel);
     }
 }
-//
+
 void mpu9150_set_accel_cal(caldata_t *cal)
 {
 	int i;
@@ -405,7 +480,7 @@ int mpu9150_read_dmp(mpudata_t *mpu)
 
 		return -1;
 	}
-	
+
 #ifdef MPU9150_DEBUG
 	fprintf(stdout, "sensors is %d\n", sensors);
 	fprintf(stdout, "more is %d\n", more);
@@ -420,7 +495,7 @@ int mpu9150_read_dmp(mpudata_t *mpu)
 
 			return -1;
 		}
-		
+
 #ifdef MPU9150_DEBUG
 	fprintf(stdout, "sensors is %d\n", sensors);
 	fprintf(stdout, "more is %d\n", more);
@@ -456,10 +531,19 @@ int mpu9150_read(mpudata_t *mpu)
 	get_ns(&tmp_time);
 #endif
 
-	//data_fusion_kalman2(mpu);
+
+#ifdef AHRS_APPLLY
+	update_ahrs(mpu);
+#elif KALMAN_THREE_APPLLY
+	//data_fusion_kalman_three_improve(mpu);
+	data_fusion_kalman_three(mpu);
+#elif EKF_APPLLY
+	data_fusion_ekf(mpu);
+#elif KALMAN_APPLLY
 	data_fusion_kalman(mpu);
-	//data_fusion(mpu);
-	//update_ahrs(mpu);
+#else 
+	data_fusion(mpu);
+#endif
 
 #ifdef MPU9150_DEBUG
 	static uint64_t tmp_time2;
@@ -473,7 +557,7 @@ int mpu9150_read(mpudata_t *mpu)
 
 /**
  * verify whethe data in mpu9150 fifo is ready
- * @return [description]
+ * @return
  */
 int data_ready()
 {
@@ -491,41 +575,106 @@ int data_ready()
 	return (status == (MPU_INT_STATUS_DATA_READY | MPU_INT_STATUS_DMP | MPU_INT_STATUS_DMP_0));
 }
 
-// change to N-E-D coordinate system
+
 void calibrate_data(mpudata_t *mpu)
 {
-	if (use_mag_cal) {
-	static float mag_data[3];
-	mag_data[0] = ((float)mpu->rawMag[0] + mag_cal_data.bias[0] ) * mag_cal_data.scale[0];
-	mag_data[1] = ((float)mpu->rawMag[1] + mag_cal_data.bias[1] ) * mag_cal_data.scale[1];
-	mag_data[2] = ((float)mpu->rawMag[2] + mag_cal_data.bias[2] ) * mag_cal_data.scale[2];
-	mpu->calibratedMag[VEC3_Y] = -mag_data[0];
-	mpu->calibratedMag[VEC3_X] =  mag_data[1];
-	mpu->calibratedMag[VEC3_Z] =  mag_data[2];
+	if (use_mag_cal) 
+	{
+		static float mag_data[3];
+		mag_data[VEC3_X] = ((float)mpu->rawMag[0] + mag_cal_data.bias[0] ) * mag_cal_data.scale[0];
+		mag_data[VEC3_Y] = ((float)mpu->rawMag[1] + mag_cal_data.bias[1] ) * mag_cal_data.scale[1];
+		mag_data[VEC3_Z] = ((float)mpu->rawMag[2] + mag_cal_data.bias[2] ) * mag_cal_data.scale[2];
+
+#ifdef AHRS_APPLLY
+		//Front-Left-Up body coordinate system
+		mpu->calibratedMag[VEC3_X] =  mag_data[VEC3_Y];
+		mpu->calibratedMag[VEC3_Y] =  mag_data[VEC3_X];
+		mpu->calibratedMag[VEC3_Z] =  -mag_data[VEC3_Z];
+#elif KALMAN_THREE_APPLLY
+		mpu->calibratedMag[VEC3_X] =  mag_data[VEC3_Y];
+		mpu->calibratedMag[VEC3_Y] =  mag_data[VEC3_X];
+		mpu->calibratedMag[VEC3_Z] =  -mag_data[VEC3_Z];
+#elif EKF_APPLLY
+		mpu->calibratedMag[VEC3_X] =  mag_data[VEC3_Y];
+		mpu->calibratedMag[VEC3_Y] =  mag_data[VEC3_X];
+		mpu->calibratedMag[VEC3_Z] =  -mag_data[VEC3_Z];
+#elif KALMAN_APPLLY
+		//Front-Right-Down body coordinate system
+		mpu->calibratedMag[VEC3_Y] = -mag_data[0];
+		mpu->calibratedMag[VEC3_X] =  mag_data[1];
+		mpu->calibratedMag[VEC3_Z] =  mag_data[2];
+#else 
+		//Front-Left-Up body coordinate system
+	 	mpu->calibratedMag[VEC3_X] =  mag_data[VEC3_Y];
+		mpu->calibratedMag[VEC3_Y] =  mag_data[VEC3_X];
+		mpu->calibratedMag[VEC3_Z] =  -mag_data[VEC3_Z];
+#endif
+
 	}
-	else {
-		mpu->calibratedMag[VEC3_Y] = -(float)mpu->rawMag[VEC3_X];
+	else 
+	{
+		//Front-Left-Up body coordinate system
+		mpu->calibratedMag[VEC3_Y] = (float)mpu->rawMag[VEC3_X];
 		mpu->calibratedMag[VEC3_X] = (float)mpu->rawMag[VEC3_Y];
-		mpu->calibratedMag[VEC3_Z] = (float)mpu->rawMag[VEC3_Z];
+		mpu->calibratedMag[VEC3_Z] = -(float)mpu->rawMag[VEC3_Z];
 	}
 
-	if (use_accel_cal) {
-    	mpu->calibratedAccel[VEC3_X] = -((float)mpu->rawAccel[VEC3_X]) * accel_cal_data.scale[VEC3_X];
+	if (use_accel_cal) 
+	{
 
-
+#ifdef AHRS_APPLLY
+    	mpu->calibratedAccel[VEC3_X] = ((float)mpu->rawAccel[VEC3_X]) * accel_cal_data.scale[VEC3_X];
       	mpu->calibratedAccel[VEC3_Y] = ((float)mpu->rawAccel[VEC3_Y]) * accel_cal_data.scale[VEC3_Y];
-
       	mpu->calibratedAccel[VEC3_Z] = ((float)mpu->rawAccel[VEC3_Z])* accel_cal_data.scale[VEC3_Z];
+#elif KALMAN_THREE_APPLLY
+		mpu->calibratedAccel[VEC3_X] = ((float)mpu->rawAccel[VEC3_X]) * accel_cal_data.scale[VEC3_X];
+		mpu->calibratedAccel[VEC3_Y] = ((float)mpu->rawAccel[VEC3_Y]) * accel_cal_data.scale[VEC3_Y];
+		mpu->calibratedAccel[VEC3_Z] = ((float)mpu->rawAccel[VEC3_Z])* accel_cal_data.scale[VEC3_Z];
+#elif EKF_APPLLY
+		mpu->calibratedAccel[VEC3_X] = ((float)mpu->rawAccel[VEC3_X]) * accel_cal_data.scale[VEC3_X];
+		mpu->calibratedAccel[VEC3_Y] = ((float)mpu->rawAccel[VEC3_Y]) * accel_cal_data.scale[VEC3_Y];
+		mpu->calibratedAccel[VEC3_Z] = ((float)mpu->rawAccel[VEC3_Z])* accel_cal_data.scale[VEC3_Z];
+#elif KALMAN_APPLLY
+		mpu->calibratedAccel[VEC3_X] = -((float)mpu->rawAccel[VEC3_X]) * accel_cal_data.scale[VEC3_X];
+		mpu->calibratedAccel[VEC3_Y] = ((float)mpu->rawAccel[VEC3_Y]) * accel_cal_data.scale[VEC3_Y];
+		mpu->calibratedAccel[VEC3_Z] = ((float)mpu->rawAccel[VEC3_Z])* accel_cal_data.scale[VEC3_Z];
+#else
+		mpu->calibratedAccel[VEC3_X] = ((float)mpu->rawAccel[VEC3_X]) * accel_cal_data.scale[VEC3_X];
+		mpu->calibratedAccel[VEC3_Y] = ((float)mpu->rawAccel[VEC3_Y]) * accel_cal_data.scale[VEC3_Y];
+		mpu->calibratedAccel[VEC3_Z] = ((float)mpu->rawAccel[VEC3_Z])* accel_cal_data.scale[VEC3_Z];
+#endif
+
 	}
-	else {
-		mpu->calibratedAccel[VEC3_X] = -(float)mpu->rawAccel[VEC3_X];
+	else 
+	{
+		mpu->calibratedAccel[VEC3_X] = (float)mpu->rawAccel[VEC3_X];
 		mpu->calibratedAccel[VEC3_Y] = (float)mpu->rawAccel[VEC3_Y];
 		mpu->calibratedAccel[VEC3_Z] = (float)mpu->rawAccel[VEC3_Z];
 	}
 
+#ifdef AHRS_APPLLY
+	mpu->rawGyro[VEC3_X] = mpu->rawGyro[VEC3_X];
+	mpu->rawGyro[VEC3_Y] = mpu->rawGyro[VEC3_Y];
+	mpu->rawGyro[VEC3_Z] = mpu->rawGyro[VEC3_Z];
+#elif KALMAN_THREE_APPLLY
+	mpu->rawGyro[VEC3_X] = mpu->rawGyro[VEC3_X];
+	mpu->rawGyro[VEC3_Y] = mpu->rawGyro[VEC3_Y];
+	mpu->rawGyro[VEC3_Z] = mpu->rawGyro[VEC3_Z];
+#elif EKF_APPLLY
+	mpu->rawGyro[VEC3_X] = mpu->rawGyro[VEC3_X];
+	mpu->rawGyro[VEC3_Y] = mpu->rawGyro[VEC3_Y];
+	mpu->rawGyro[VEC3_Z] = mpu->rawGyro[VEC3_Z];
+#elif KALMAN_APPLLY
 	mpu->rawGyro[VEC3_X] = mpu->rawGyro[VEC3_X];
 	mpu->rawGyro[VEC3_Y] = -mpu->rawGyro[VEC3_Y];
 	mpu->rawGyro[VEC3_Z] = -mpu->rawGyro[VEC3_Z];
+#else 
+	mpu->rawGyro[VEC3_X] = mpu->rawGyro[VEC3_X];
+	mpu->rawGyro[VEC3_Y] = mpu->rawGyro[VEC3_Y];
+	mpu->rawGyro[VEC3_Z] = mpu->rawGyro[VEC3_Z];
+#endif
+
+
 }
 
 void tilt_compensate(quaternion_t magQ, quaternion_t unfusedQ)
@@ -538,17 +687,16 @@ void tilt_compensate(quaternion_t magQ, quaternion_t unfusedQ)
 	quaternionMultiply(unfusedQ, tempQ, magQ);
 }
 
+/**
+ * data fusion to estimate euler using DMP in MPU9150
+ * @param  mpu
+ * @return     0:success
+ */
+
 int data_fusion(mpudata_t *mpu)
 {
 	quaternion_t dmpQuat;
 	vector3d_t dmpEuler;
-	quaternion_t magQuat;
-	quaternion_t unfusedQuat;
-	float deltaDMPYaw;
-	float deltaMagYaw;
-	float newMagYaw;
-	float newYaw;
-
 	dmpQuat[QUAT_W] = (float)mpu->rawQuat[QUAT_W];
 	dmpQuat[QUAT_X] = (float)mpu->rawQuat[QUAT_X];
 	dmpQuat[QUAT_Y] = (float)mpu->rawQuat[QUAT_Y];
@@ -559,60 +707,8 @@ int data_fusion(mpudata_t *mpu)
 
 	mpu->fusedEuler[VEC3_X] = dmpEuler[VEC3_X];
 	mpu->fusedEuler[VEC3_Y] = -dmpEuler[VEC3_Y];
-	mpu->fusedEuler[VEC3_Z] = 0;
+	mpu->fusedEuler[VEC3_Z] = -dmpEuler[VEC3_Z];
 
-	eulerToQuaternion(mpu->fusedEuler, unfusedQuat);
-
-	deltaDMPYaw = -dmpEuler[VEC3_Z] + mpu->lastDMPYaw;
-	mpu->lastDMPYaw = dmpEuler[VEC3_Z];
-
-	magQuat[QUAT_W] = 0;
-	magQuat[QUAT_X] = mpu->calibratedMag[VEC3_X];
-  	magQuat[QUAT_Y] = mpu->calibratedMag[VEC3_Y];
-  	magQuat[QUAT_Z] = mpu->calibratedMag[VEC3_Z];
-
-	tilt_compensate(magQuat, unfusedQuat);
-
-	newMagYaw = -atan2f(magQuat[QUAT_Y], magQuat[QUAT_X]);
-
-	if (newMagYaw != newMagYaw) {
-		printf("newMagYaw NAN\n");
-		return -1;
-	}
-
-	if (newMagYaw < 0.0f)
-		newMagYaw = TWO_PI + newMagYaw;
-
-	newYaw = mpu->lastYaw + deltaDMPYaw;
-
-	if (newYaw > TWO_PI)
-		newYaw -= TWO_PI;
-	else if (newYaw < 0.0f)
-		newYaw += TWO_PI;
-
-	deltaMagYaw = newMagYaw - newYaw;
-
-	if (deltaMagYaw >= (float)M_PI)
-		deltaMagYaw -= TWO_PI;
-	else if (deltaMagYaw < -(float)M_PI)
-		deltaMagYaw += TWO_PI;
-
-	if (yaw_mixing_factor > 0)
-		newYaw += deltaMagYaw / yaw_mixing_factor;
-
-	if (newYaw > TWO_PI)
-		newYaw -= TWO_PI;
-	else if (newYaw < 0.0f)
-		newYaw += TWO_PI;
-
-	mpu->lastYaw = newYaw;
-
-	if (newYaw > (float)M_PI)
-		newYaw -= TWO_PI;
-
-	mpu->fusedEuler[VEC3_Z] = newYaw;
-
-	eulerToQuaternion(mpu->fusedEuler, mpu->fusedQuat);
 	if (mpu->fusedEuler[VEC3_Z] < 0)
 	{
 		mpu->fusedEuler[VEC3_Z] += 2 * PI;
@@ -621,20 +717,25 @@ int data_fusion(mpudata_t *mpu)
 	return 0;
 }
 
+
 /**
  * kalman filter apply in data fusion to estimate euler
- * @param  mpu [description]
- * @return     [description]
+ * @param  mpu
+ * @return     0:success
  */
-int data_fusion_kalman2(mpudata_t *mpu)
+int data_fusion_kalman_three(mpudata_t *mpu)
 {
+
+
 	//static quaternion_t dmp_quat;
 	static vector3d_t measure_euler;
 	float tmp_norm;
-	tmp_norm = inv_sqrt(mpu->calibratedAccel[VEC3_X] * mpu->calibratedAccel[VEC3_X] +
-							mpu->calibratedAccel[VEC3_Y] * mpu->calibratedAccel[VEC3_Y] +
-							mpu->calibratedAccel[VEC3_Z] * mpu->calibratedAccel[VEC3_Z]);
+	tmp_norm = inv_sqrt(mpu->calibratedAccel[VEC3_X] * mpu->calibratedAccel[VEC3_X]
+							+ mpu->calibratedAccel[VEC3_Y] * mpu->calibratedAccel[VEC3_Y]
+							+ mpu->calibratedAccel[VEC3_Z] * mpu->calibratedAccel[VEC3_Z]);
+	//pitch
 	measure_euler[VEC3_Y] = -asin(mpu->calibratedAccel[VEC3_X] * tmp_norm);
+	//roll
 	measure_euler[VEC3_X] = atan2(mpu->calibratedAccel[VEC3_Y], mpu->calibratedAccel[VEC3_Z]);
 
 	static double hn_y, hn_x;
@@ -644,105 +745,447 @@ int data_fusion_kalman2(mpudata_t *mpu)
 	mag[VEC3_Z] = mpu->calibratedMag[VEC3_Z];
 
 	hn_y = mag[VEC3_Y] * cos(measure_euler[VEC3_X]) - mag[VEC3_Z] * sin(measure_euler[VEC3_X]);
-	hn_x = mag[VEC3_X] * cos(measure_euler[VEC3_Y]) + mag[VEC3_Y] * sin(measure_euler[VEC3_X]) * sin(measure_euler[VEC3_Y]) + mag[VEC3_Z] * cos(measure_euler[VEC3_X]) * sin(measure_euler[VEC3_Y]);
+	hn_x = mag[VEC3_X] * cos(measure_euler[VEC3_Y])
+				+ mag[VEC3_Y] * sin(measure_euler[VEC3_X]) * sin(measure_euler[VEC3_Y])
+				+ mag[VEC3_Z] * cos(measure_euler[VEC3_X]) * sin(measure_euler[VEC3_Y]);
 	measure_euler[VEC3_Z] = (double) atan2(-hn_y, hn_x);
 	// change the range of mag_angle into 0 - 2 * PI,it is necessary
 	if(measure_euler[VEC3_Z]  < 0)
 	{
 		measure_euler[VEC3_Z]  += 2 * PI;
 	}
-
+	set_matrix(kalman_three_dim->measure,
+				measure_euler[VEC3_X], measure_euler[VEC3_Y], measure_euler[VEC3_Z]);
+	
 	static double delt_t = 0.0;
-	if (mag_time_init)
+	static vector3d_t last_gyro;
+	static uint64_t last_kalman_time;
+	static bool kalman_time_init = false;
+	if (kalman_time_init)
 	{
-		delt_t = (double)(mpu->magTimestamp - last_mag_time);
-		last_mag_time = mpu->magTimestamp;
+		delt_t = (double)(mpu->magTimestamp - last_kalman_time);
+		last_kalman_time = mpu->magTimestamp;
+		set_matrix(kalman_three_dim->control_input,
+				(double)last_gyro[VEC3_X] / GRO_FACTOR / 180 * PI,
+				(double)last_gyro[VEC3_Y] / GRO_FACTOR / 180 * PI,
+				(double)last_gyro[VEC3_Z] / GRO_FACTOR / 180 * PI);
+	
+		last_gyro[VEC3_X] = mpu->rawGyro[VEC3_X];
+		last_gyro[VEC3_Y] = mpu->rawGyro[VEC3_Y];
+		last_gyro[VEC3_Z] = mpu->rawGyro[VEC3_Z];
+		
+#ifdef KALMAN_DEBUG
 		fprintf(stdout, "delt_t is %f\n", delt_t * 1e-3);
-		set_matrix(f_yaw->state_transition,
-				1.0, 	-delt_t * 1e-3, 0.0, 0.0, 0.0, 0.0,
-				0.0, 	1.0, 		 0.0, 0.0, 0.0, 0.0,
-				0.0, 0.0, 1.0, -delt_t * 1e-3, 0.0, 0.0,
-				0.0 ,0.0, 0.0, 1.0, 0.0 ,0.0,
-				0.0, 0.0, 0.0, 0.0, 1.0, -delt_t * 1e-3,
-				0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
+#endif
 
-		set_matrix(f_yaw->control_input_model, delt_t * 1e-3, 0.0, 0.0,
-												0.0, 0.0, 0.0,
-												 0.0, delt_t * 1e-3, 0.0,
-												0.0, 0.0, 0.0,
-												0.0, 0.0, delt_t * 1e-3,
-												0.0, 0.0, 0.0);
+		set_matrix(kalman_three_dim->state_transition,
+				1.0, -delt_t * 1e-3, 0.0, 0.0,            0.0, 0.0,
+				0.0, 1.0, 		     0.0, 0.0,            0.0, 0.0,
+				0.0, 0.0,            1.0, -delt_t * 1e-3, 0.0, 0.0,
+				0.0, 0.0,            0.0, 1.0,            0.0, 0.0,
+				0.0, 0.0,            0.0, 0.0,            1.0, -delt_t * 1e-3,
+				0.0, 0.0,            0.0, 0.0,            0.0, 1.0);
+
+		set_matrix(kalman_three_dim->control_input_model,
+						delt_t * 1e-3, 	0.0, 			0.0,
+						0.0,           	0.0, 			0.0,
+						0.0,      		delt_t * 1e-3, 	0.0,
+						0.0, 			0.0, 			0.0,
+						0.0, 			0.0, 			delt_t * 1e-3,
+						0.0, 			0.0, 			0.0);
+		set_matrix(kalman_three_dim->process_noise_covariance,
+					Q_ANGLE,0.0,	0.0,	0.0,	0.0,	0.0,
+					0.0,	Q_BIAS, 0.0,	0.0,	0.0,	0.0,
+					0.0,	0.0,	Q_ANGLE,0.0,	0.0,	0.0,
+					0.0,	0.0,	0.0,	Q_BIAS, 0.0,	0.0,
+					0.0,	0.0,	0.0,	0.0,	Q_ANGLE,0.0,
+					0.0,	0.0,	0.0,	0.0,	0.0,	Q_BIAS);
+		sm_mlt(delt_t * 1e-3, kalman_three_dim->process_noise_covariance, kalman_three_dim->process_noise_covariance);
 	}
 	else
 	{
-		last_mag_time = mpu->magTimestamp;
-		mag_time_init = true ;
+		last_kalman_time = mpu->magTimestamp;
+		kalman_time_init = true ;
+		last_gyro[VEC3_X] = mpu->rawGyro[VEC3_X];
+		last_gyro[VEC3_Y] = mpu->rawGyro[VEC3_Y];
+		last_gyro[VEC3_Z] = mpu->rawGyro[VEC3_Z];
+		kalman_three_dim->state_estimate->me[0][0] = measure_euler[VEC3_X];
+		kalman_three_dim->state_estimate->me[2][0] = measure_euler[VEC3_Y];
+		kalman_three_dim->state_estimate->me[4][0] = measure_euler[VEC3_Z];
+		
+		return -1;
 	}
 
-	//if (i <= 5)
-	//{
-	//	mag_yaw += mag_angle;
-
-	//}
-	//else
-	//{
-	 	//i = 0;
-	 	//mag_angle = mag_yaw / 5;
-		//mag_yaw = 0;
-	set_matrix(f_yaw->measure,  measure_euler[VEC3_X], measure_euler[VEC3_Y], measure_euler[VEC3_Z]);
-		//fprintf(stdout, "measure is : %f\n", (double) mag_angle * RAD_TO_DEG);
-
 #ifdef KALMAN_DEBUG
+	fprintf(stdout, "measure euler, x : %f, y : %f, z : %f\n", measure_euler[VEC3_X] * RAD_TO_DEG, measure_euler[VEC3_Y] * RAD_TO_DEG, measure_euler[VEC3_Z] * RAD_TO_DEG);
 	fprintf(stdout, "\n");
 	fprintf(stdout, "measure is : \n");
-	m_output(f_yaw->measure);
-#endif
-
-	set_matrix(f_yaw->control_input, (double)mpu->rawGyro[VEC3_X] / 16.4 / 180 * PI,
-									(double)mpu->rawGyro[VEC3_Y] / 16.4 / 180 * PI,
-									(double)mpu->rawGyro[VEC3_Z] / 16.4 / 180 * PI);
-
-#ifdef KALMAN_DEBUG
+	m_output(kalman_three_dim->measure);
 	fprintf(stdout, "\n");
 	fprintf(stdout, "control_input is \n");
-	m_output(f_yaw->control_input);
+	m_output(kalman_three_dim->control_input);
 #endif
-	predict(f_yaw);
-	update(f_yaw);
+
+	predict(kalman_three_dim);
+
+	update(kalman_three_dim);
 
 #ifdef KALMAN_DEBUG
 	fprintf(stdout, "covariance_estimate is :\n");
-	m_output(f_yaw->covariance_estimate);
+	m_output(kalman_three_dim->covariance_estimate);
 #endif
 
-	mpu->fusedEuler[VEC3_X] = f_yaw->state_estimate->me[0][0];
-	mpu->fusedEuler[VEC3_Y] = f_yaw->state_estimate->me[2][0];
-
+	mpu->fusedEuler[VEC3_X] = kalman_three_dim->state_estimate->me[0][0];
+	mpu->fusedEuler[VEC3_Y] = -kalman_three_dim->state_estimate->me[2][0];
+	mpu->fusedEuler[VEC3_Z] = -kalman_three_dim->state_estimate->me[4][0] + 2 * PI;
 	//the range of mpu->fuseEuler is -PI to PI
-	if (f_yaw->state_estimate->me[0][0] >=  PI)
+	if (mpu->fusedEuler[VEC3_Z] < 0)
 	{
-		mpu->fusedEuler[VEC3_Z] = f_yaw->state_estimate->me[4][0] - 2 * PI;
+		mpu->fusedEuler[VEC3_Z] += 2 * PI;
+	}
+	return 0;
+
+}
+
+
+/**
+ * kalman filter apply in data fusion to estimate euler, input in an average filter
+ * @param  mpu
+ * @return     0:success
+ */
+int data_fusion_kalman_three_improve(mpudata_t *mpu)
+{
+	static double last_kalman_time = 0;
+	static bool kalman_time_init = false;
+	static double delt_t = 0.0;
+	static vector3d_t last_gyro;
+	if (kalman_time_init)
+	{
+		delt_t = (double)(mpu->magTimestamp - last_kalman_time);
+		last_kalman_time = mpu->magTimestamp;
+
+		set_matrix(kalman_three_dim->control_input,
+				(double)last_gyro[VEC3_X] / GRO_FACTOR / 180 * PI,
+				(double)last_gyro[VEC3_Y] / GRO_FACTOR / 180 * PI,
+				(double)last_gyro[VEC3_Z] / GRO_FACTOR / 180 * PI);
+		last_gyro[VEC3_X] = mpu->rawGyro[VEC3_X];
+		last_gyro[VEC3_Y] = mpu->rawGyro[VEC3_Y];
+		last_gyro[VEC3_Z] = mpu->rawGyro[VEC3_Z];
+
+		set_matrix(kalman_three_dim->state_transition,
+				1.0, -delt_t * 1e-3, 0.0, 0.0,            0.0, 0.0,
+				0.0, 1.0, 		     0.0, 0.0,            0.0, 0.0,
+				0.0, 0.0,            1.0, -delt_t * 1e-3, 0.0, 0.0,
+				0.0, 0.0,            0.0, 1.0,            0.0, 0.0,
+				0.0, 0.0,            0.0, 0.0,            1.0, -delt_t * 1e-3,
+				0.0, 0.0,            0.0, 0.0,            0.0, 1.0);
+
+		set_matrix(kalman_three_dim->control_input_model,
+						delt_t * 1e-3, 	0.0, 			0.0,
+						0.0,           	0.0, 			0.0,
+						0.0,      		delt_t * 1e-3, 	0.0,
+						0.0, 			0.0, 			0.0,
+						0.0, 			0.0, 			delt_t * 1e-3,
+						0.0, 			0.0, 			0.0);
+
+		set_matrix(kalman_three_dim->process_noise_covariance,
+					Q_ANGLE,0.0,	0.0,	0.0,	0.0,	0.0,
+					0.0,	Q_BIAS, 0.0,	0.0,	0.0,	0.0,
+					0.0,	0.0,	Q_ANGLE,0.0,	0.0,	0.0,
+					0.0,	0.0,	0.0,	Q_BIAS, 0.0,	0.0,
+					0.0,	0.0,	0.0,	0.0,	Q_ANGLE,0.0,
+					0.0,	0.0,	0.0,	0.0,	0.0,	Q_BIAS);
+		sm_mlt(delt_t * 1e-3, kalman_three_dim->process_noise_covariance, kalman_three_dim->process_noise_covariance);
 	}
 	else
 	{
-		mpu->fusedEuler[VEC3_Z] = f_yaw->state_estimate->me[4][0];
+		last_kalman_time = mpu->magTimestamp;
+		kalman_time_init = true ;
+		last_gyro[VEC3_X] = mpu->rawGyro[VEC3_X];
+		last_gyro[VEC3_Y] = mpu->rawGyro[VEC3_Y];
+		last_gyro[VEC3_Z] = mpu->rawGyro[VEC3_Z];
+		return -1;
 	}
 
+	predict(kalman_three_dim);
 
+	//static quaternion_t dmp_quat;
+	static vector3d_t measure_euler;
+	static vector3d_t measure_euler_sum;
+	float tmp_norm;
+	tmp_norm = inv_sqrt(mpu->calibratedAccel[VEC3_X] * mpu->calibratedAccel[VEC3_X]
+							+ mpu->calibratedAccel[VEC3_Y] * mpu->calibratedAccel[VEC3_Y]
+							+ mpu->calibratedAccel[VEC3_Z] * mpu->calibratedAccel[VEC3_Z]);
+	//pitch
+	measure_euler[VEC3_Y] = -asin(mpu->calibratedAccel[VEC3_X] * tmp_norm);
+	//roll
+	measure_euler[VEC3_X] = atan2(mpu->calibratedAccel[VEC3_Y], mpu->calibratedAccel[VEC3_Z]);
+
+	static double hn_y, hn_x;
+	static double mag[3];
+	mag[VEC3_X] = mpu->calibratedMag[VEC3_X];
+	mag[VEC3_Y] = mpu->calibratedMag[VEC3_Y];
+	mag[VEC3_Z] = mpu->calibratedMag[VEC3_Z];
+	hn_y = mag[VEC3_Y] * cos(measure_euler[VEC3_X]) - mag[VEC3_Z] * sin(measure_euler[VEC3_X]);
+	hn_x = mag[VEC3_X] * cos(measure_euler[VEC3_Y])
+				+ mag[VEC3_Y] * sin(measure_euler[VEC3_X]) * sin(measure_euler[VEC3_Y])
+				+ mag[VEC3_Z] * cos(measure_euler[VEC3_X]) * sin(measure_euler[VEC3_Y]);
+	measure_euler[VEC3_Z] = (double) atan2(-hn_y, hn_x);
+	// change the range of mag_angle into 0 - 2 * PI,it is necessary
+	if(measure_euler[VEC3_Z]  < 0)
+	{
+		measure_euler[VEC3_Z]  += 2 * PI;
+	}
+	static int num_measure = 0;
+	const int NUM_TIME = 5;
+	if(num_measure == NUM_TIME)
+	{
+		num_measure = 0;
+		measure_euler[VEC3_X] = measure_euler_sum[VEC3_X] / NUM_TIME;
+		measure_euler[VEC3_Y] = measure_euler_sum[VEC3_Y] / NUM_TIME;
+		measure_euler[VEC3_Z] = measure_euler_sum[VEC3_Z] / NUM_TIME;
+		set_matrix(kalman_three_dim->measure,
+						measure_euler[VEC3_X], measure_euler[VEC3_Y], measure_euler[VEC3_Z]);
+		update(kalman_three_dim);
+		measure_euler_sum[VEC3_X] = 0;
+		measure_euler_sum[VEC3_Y] = 0;
+		measure_euler_sum[VEC3_Z] = 0;
+	}
+	else if(num_measure < NUM_TIME)
+	{
+		num_measure++;
+		measure_euler_sum[VEC3_X] += measure_euler[VEC3_X];
+		measure_euler_sum[VEC3_Y] += measure_euler[VEC3_Y];
+		measure_euler_sum[VEC3_Z] += measure_euler[VEC3_Z];
+		kalman_three_dim->state_estimate->me[0][0] = kalman_three_dim->state_predict->me[0][0];
+		kalman_three_dim->state_estimate->me[2][0] = kalman_three_dim->state_predict->me[2][0];
+		kalman_three_dim->state_estimate->me[4][0] = kalman_three_dim->state_predict->me[4][0];
+
+	}
+	mpu->fusedEuler[VEC3_X] = kalman_three_dim->state_estimate->me[0][0];
+	mpu->fusedEuler[VEC3_Y] = -kalman_three_dim->state_estimate->me[2][0];
+	mpu->fusedEuler[VEC3_Z] = -kalman_three_dim->state_estimate->me[4][0] + 2 * PI;
+
+	//the range of mpu->fuseEuler is -PI to PI
+	if (mpu->fusedEuler[VEC3_Z] < 0)
+	{
+		mpu->fusedEuler[VEC3_Z] += 2 * PI;
+	}
 
 	return 0;
 
 }
 
+
+
+/**
+ * ekf filter apply in data fusion to estimate euler
+ * @param  mpu
+ * @return     0:success
+ */
+int data_fusion_ekf(mpudata_t *mpu)
+{
+
+	static vector3d_t measure_euler;
+	static float tmp_norm;
+	static double delt_t = 0.0;
+	static vector3d_t last_gyro;
+	static uint64_t last_kalman_time;
+	static bool kalman_time_init = false;
+	static quaternion_t quat;
+	static float tmp_x, tmp_y, tmp_z;
+	static float q0q0, q0q1, q0q2, q0q3, q1q1, q1q2, q1q3, q2q2, q2q3, q3q3;  
+	static float hx, hy, bx, bz;
+	static float ax, ay, az;
+	static float mx, my, mz;
+	static float wx, wy, wz;
+	static float vx, vy, vz;
+	static float q0, q1, q2, q3;
+	quat[QUAT_W] = kalman_ekf->state_estimate->me[0][0];
+	quat[QUAT_X] = kalman_ekf->state_estimate->me[1][0];
+	quat[QUAT_Y] = kalman_ekf->state_estimate->me[2][0];
+	quat[QUAT_Z] = kalman_ekf->state_estimate->me[3][0];
+	if (kalman_time_init)
+	{
+		delt_t = (double)(mpu->magTimestamp - last_kalman_time);
+		last_kalman_time = mpu->magTimestamp;
+		
+#ifdef KALMAN_DEBUG
+		fprintf(stdout, "delt_t is %f\n", delt_t * 1e-3);
+#endif
+
+		tmp_x = last_gyro[VEC3_X] * delt_t * 1e-3 / 2.0;
+		tmp_y = last_gyro[VEC3_Y] * delt_t * 1e-3 / 2.0;
+		tmp_z = last_gyro[VEC3_Z] * delt_t * 1e-3 / 2.0;
+		last_gyro[VEC3_X] = mpu->rawGyro[VEC3_X] / GRO_FACTOR / 180 * PI;
+		last_gyro[VEC3_Y] = mpu->rawGyro[VEC3_Y] / GRO_FACTOR / 180 * PI;
+		last_gyro[VEC3_Z] = mpu->rawGyro[VEC3_Z] / GRO_FACTOR / 180 * PI;
+		set_matrix(kalman_ekf->state_transition,
+				1.0, 	-tmp_x,	-tmp_y,	-tmp_z,
+				tmp_x, 	1.0,	tmp_z, 	tmp_y,
+				tmp_y, 	-tmp_z, 1.0, 	tmp_x,
+				tmp_z, 	tmp_y, 	-tmp_x, 1.0);
+
+		set_matrix(kalman_ekf->process_noise_covariance,
+					Q_QUAT,	0.0,	0.0,	0.0,
+					0.0,	Q_QUAT, 0.0,	0.0,
+					0.0,	0.0,	Q_QUAT,	0.0,
+					0.0,	0.0,	0.0,	Q_QUAT);
+		sm_mlt(delt_t * 1e-3, kalman_ekf->process_noise_covariance, kalman_ekf->process_noise_covariance);
+
+		quat[QUAT_W] = quat[QUAT_W] - quat[QUAT_X] * tmp_x - quat[QUAT_Y] * tmp_y - quat[QUAT_Z] * tmp_z;
+		quat[QUAT_X] = quat[QUAT_X] + quat[QUAT_W] * tmp_x + quat[QUAT_Y] * tmp_z + quat[QUAT_Z] * tmp_y;
+		quat[QUAT_Y] = quat[QUAT_Y] + quat[QUAT_W] * tmp_y - quat[QUAT_X] * tmp_z + quat[QUAT_Z] * tmp_x;
+		quat[QUAT_Z] = quat[QUAT_Z] + quat[QUAT_W] * tmp_z + quat[QUAT_X] * tmp_y - quat[QUAT_Y] * tmp_x;
+		quaternionNormalize(quat);
+		set_matrix(kalman_ekf->state_predict, 
+					quat[QUAT_W], quat[QUAT_X], quat[QUAT_Y], quat[QUAT_Z]);
+#ifdef 	KALMAN_DEBUG
+		quaternionToEuler(quat, measure_euler);
+		fprintf(stdout, "predict euler, x : %f, y : %f, z : %f\n", measure_euler[VEC3_X] * RAD_TO_DEG, measure_euler[VEC3_Y] * RAD_TO_DEG, measure_euler[VEC3_Z] * RAD_TO_DEG); 
+#endif	
+		// Normalise accelerometer measurement
+		ax = mpu->calibratedAccel[VEC3_X];
+		ay = mpu->calibratedAccel[VEC3_Y];
+		az = mpu->calibratedAccel[VEC3_Z];
+		tmp_norm = inv_sqrt(ax * ax + ay * ay + az * az);
+		ax *= tmp_norm;
+		ay *= tmp_norm;
+		az *= tmp_norm;     
+
+		// Normalise magnetometer measurement
+		mx = mpu->calibratedMag[VEC3_X];
+		my = mpu->calibratedMag[VEC3_Y];
+		mz = mpu->calibratedMag[VEC3_Z];
+		tmp_norm = inv_sqrt(mx * mx + my * my + mz * mz);
+		mx *= tmp_norm;
+		my *= tmp_norm;
+		mz *= tmp_norm; 
+		set_matrix(kalman_ekf->measure,
+					ax, ay, az, mx, my, mz);
+		
+		q0 = quat[QUAT_W];
+		q1 = quat[QUAT_X];
+		q2 = quat[QUAT_Y];
+		q3 = quat[QUAT_Z];
+
+		// Auxiliary variables to avoid repeated arithmetic
+        q0q0 = q0 * q0;
+        q0q1 = q0 * q1;
+        q0q2 = q0 * q2;
+        q0q3 = q0 * q3;
+        q1q1 = q1 * q1;
+        q1q2 = q1 * q2;
+        q1q3 = q1 * q3;
+        q2q2 = q2 * q2;
+        q2q3 = q2 * q3;
+        q3q3 = q3 * q3; 
+
+        // Reference direction of Earth's magnetic field
+        hx = 2.0f * (mx * (0.5f - q2q2 - q3q3) + my * (q1q2 - q0q3) + mz * (q1q3 + q0q2));
+        hy = 2.0f * (mx * (q1q2 + q0q3) + my * (0.5f - q1q1 - q3q3) + mz * (q2q3 - q0q1));
+        bx = sqrt(hx * hx + hy * hy);
+        bz = 2.0f * (mx * (q1q3 - q0q2) + my * (q2q3 + q0q1) + mz * (0.5f - q1q1 - q2q2));
+
+		vx = 2 * (q1q3 - q0q2);
+		vy = 2 * (q0q1 + q2q3);
+		vz = 2 * (q0q0 - 0.5f + q3q3);
+		wx = 2 * (bx * (0.5f - q2q2 - q3q3) + bz * (q1q3 - q0q2));
+        wy = 2 * (bx * (q1q2 - q0q3) + bz * (q0q1 + q2q3));
+        wz = 2 * (bx * (q0q2 + q1q3) + bz * (0.5f - q1q1 - q2q2)); 
+		set_matrix(kalman_ekf->tmp_measure_dimension, 
+					vx, vy, vz, wx, wy, wz);
+		set_matrix(kalman_ekf->measure_model, 
+					-2 * q2, 					2 * q3, 				-2 * q0, 					2 * q1,
+					2 * q1, 					2 * q0, 				2 * q3,						2 * q2,
+					2 * q0, 					-2 * q1, 				-2 * q2, 					2 * q3, 
+					2 * (q0 * bx - q2 * bz), 	2 * (q1 * bx + q3 * bz), 2 * (-q2 * bx - q0 * bz), 	2 * (-q3 * bx + q1 * bz),
+					2 * (-q3 * bx + q1 * bz), 	2 * (q2 * bx + q0 * bz), 2 * (q1 * bx + q3 * bz), 	2 * (-q0 * bx + q2 * bz),
+					2 * (q2 * bx + q0 * bz), 	2 * (q3 * bx - q1 * bz), 2 * (q0 * bx - q2 * bz), 	2 * (q1 * bx + q3 * bz));
+
+	}
+	else
+	{
+
+
+		tmp_norm = inv_sqrt(mpu->calibratedAccel[VEC3_X] * mpu->calibratedAccel[VEC3_X]
+								+ mpu->calibratedAccel[VEC3_Y] * mpu->calibratedAccel[VEC3_Y]
+								+ mpu->calibratedAccel[VEC3_Z] * mpu->calibratedAccel[VEC3_Z]);
+		//pitch
+		measure_euler[VEC3_Y] = -asin(mpu->calibratedAccel[VEC3_X] * tmp_norm);
+		//roll
+		measure_euler[VEC3_X] = atan2(mpu->calibratedAccel[VEC3_Y], mpu->calibratedAccel[VEC3_Z]);
+		
+		static double hn_y, hn_x;
+		static double mag[3];
+		mag[VEC3_X] = mpu->calibratedMag[VEC3_X];
+		mag[VEC3_Y] = mpu->calibratedMag[VEC3_Y];
+		mag[VEC3_Z] = mpu->calibratedMag[VEC3_Z];
+		
+		hn_y = mag[VEC3_Y] * cos(measure_euler[VEC3_X]) - mag[VEC3_Z] * sin(measure_euler[VEC3_X]);
+		hn_x = mag[VEC3_X] * cos(measure_euler[VEC3_Y])
+					+ mag[VEC3_Y] * sin(measure_euler[VEC3_X]) * sin(measure_euler[VEC3_Y])
+					+ mag[VEC3_Z] * cos(measure_euler[VEC3_X]) * sin(measure_euler[VEC3_Y]);
+		measure_euler[VEC3_Z] = (double) atan2(-hn_y, hn_x);
+
+		last_kalman_time = mpu->magTimestamp;
+		kalman_time_init = true ;
+		last_gyro[VEC3_X] = mpu->rawGyro[VEC3_X] / GRO_FACTOR / 180 * PI;
+		last_gyro[VEC3_Y] = mpu->rawGyro[VEC3_Y] / GRO_FACTOR / 180 * PI;
+		last_gyro[VEC3_Z] = mpu->rawGyro[VEC3_Z] / GRO_FACTOR / 180 * PI;
+#ifdef 	KALMAN_DEBUG
+		fprintf(stdout, "initial alignment euler, x : %f, y : %f, z : %f\n", measure_euler[VEC3_X] * RAD_TO_DEG, measure_euler[VEC3_Y] * RAD_TO_DEG, measure_euler[VEC3_Z] * RAD_TO_DEG); 
+#endif
+		eulerToQuaternion(measure_euler, quat);
+		kalman_ekf->state_estimate->me[0][0] = quat[QUAT_W];
+		kalman_ekf->state_estimate->me[1][0] = quat[QUAT_X];
+		kalman_ekf->state_estimate->me[2][0] = quat[QUAT_Y];
+		kalman_ekf->state_estimate->me[3][0] = quat[QUAT_Z];
+		return -1;
+	}
+
+#ifdef KALMAN_DEBUG
+	fprintf(stdout, "\n");
+	fprintf(stdout, "measure is : \n");
+	m_output(kalman_ekf->measure);
+#endif
+
+	predict_ekf(kalman_ekf);
+
+	update_ekf(kalman_ekf);
+	
+#ifdef KALMAN_DEBUG
+	fprintf(stdout, "covariance_estimate is :\n");
+	m_output(kalman_ekf->covariance_estimate);
+#endif
+
+	quat[QUAT_W] = kalman_ekf->state_estimate->me[0][0];
+	quat[QUAT_X] = kalman_ekf->state_estimate->me[1][0];
+	quat[QUAT_Y] = kalman_ekf->state_estimate->me[2][0];
+	quat[QUAT_Z] = kalman_ekf->state_estimate->me[3][0];
+	quaternionToEuler(quat,mpu->fusedEuler);
+	mpu->fusedEuler[VEC3_Y] = -mpu->fusedEuler[VEC3_Y];
+	mpu->fusedEuler[VEC3_Z] = -mpu->fusedEuler[VEC3_Z];
+	//the range of mpu->fuseEuler is -PI to PI
+	if (mpu->fusedEuler[VEC3_Z] < 0)
+	{
+		mpu->fusedEuler[VEC3_Z] += 2 * PI;
+	}
+	return 0;
+
+}
+
+
 /**kalman filter apply in data fusion to estimate yaw
- * [data_fusion_kalman description]
- * @param  mpu [description]
- * @return     [description]
+ * @param  mpu handler
+ * @return     0:success
  */
 int data_fusion_kalman(mpudata_t *mpu)
 {
 	static quaternion_t dmp_quat;
 	static vector3d_t dmp_euler;
+	static uint64_t last_mag_time;
+	static bool mag_time_init = false;
 
 	dmp_quat[0] = (float) mpu->rawQuat[0];
 	dmp_quat[1] = (float) mpu->rawQuat[1];
@@ -763,7 +1206,9 @@ int data_fusion_kalman(mpudata_t *mpu)
 	mag[VEC3_Z] = mpu->calibratedMag[VEC3_Z];
 
 	hn_y = mag[VEC3_Y] * cos(dmp_euler[VEC3_X]) - mag[VEC3_Z] * sin(dmp_euler[VEC3_X]);
-	hn_x = mag[VEC3_X] * cos(dmp_euler[VEC3_Y]) + mag[VEC3_Y] * sin(dmp_euler[VEC3_X]) * sin(dmp_euler[VEC3_Y]) + mag[VEC3_Z] * cos(dmp_euler[VEC3_X]) * sin(dmp_euler[VEC3_Y]);
+	hn_x = mag[VEC3_X] * cos(dmp_euler[VEC3_Y])
+			+ mag[VEC3_Y] * sin(dmp_euler[VEC3_X]) * sin(dmp_euler[VEC3_Y])
+			+ mag[VEC3_Z] * cos(dmp_euler[VEC3_X]) * sin(dmp_euler[VEC3_Y]);
 	mag_angle = (double) atan2(-hn_y, hn_x);
 	// change the range of mag_angle into 0 - 2 * PI,it is necessary
 	if(mag_angle < 0)
@@ -788,20 +1233,7 @@ int data_fusion_kalman(mpudata_t *mpu)
 		mag_time_init = true ;
 	}
 
-
-	static float mag_yaw = 0;
-	//if (i <= 5)
-	//{
-	//	mag_yaw += mag_angle;
-
-	//}
-	//else
-	//{
-	 	//i = 0;
-	 	//mag_angle = mag_yaw / 5;
-		//mag_yaw = 0;
-		set_matrix(f_yaw->measure,  mag_angle);
-		//fprintf(stdout, "measure is : %f\n", (double) mag_angle * RAD_TO_DEG);
+	set_matrix(f_yaw->measure,  mag_angle);
 
 #ifdef KALMAN_DEBUG
 	fprintf(stdout, "\n");

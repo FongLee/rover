@@ -12,22 +12,22 @@ CFLAGS = -Wall -std=gnu99 -c -g
 #-pg -lefence -g -static
 LDFLAGS = -g
 
+
 #add  -DGPS_DEBUG -DUDP_DEBUG -DCOMMU_DEBUG -DMPU9150_DEBUG_ERROR
 #-DI2C_DEBUG -DMPU9150_DEBUG  -DKALMAN_DEBUG  -DAHRS_DEBUG  -DMEMWATCH
 #-DMEMWATCH_STDIO -DULTRA_DEBUG  -DTCP_DEBUG -DCONTROL_DEBUG  -DSIG_DEBUG  for debugging
 #add -DTCP -DUDP for using tcp or udp
-DEFS = -DEMPL_TARGET_LINUX -DMPU9150 -DAK8975_SECONDARY -DUDP
-
+# add -DAHRS_APPLLY -DKALMAN_THREE_APPLLY -DKALMAN_APPLLY -DEKF_APPLLY
+DEFS = -DEMPL_TARGET_LINUX -DMPU9150 -DAK8975_SECONDARY -DUDP -DEKF_APPLLY
 
 INSTALL_PATH = ./install
 SRCDIR = ./src
 MAVLINKDIR = ./lib/mavlink
 MAVLINKDIR2 = ./lib/mavlink/common
 HALDIR = ./lib/ap_hal_linux
-#INVDIR = ./lib/ap_imu_sensor/eMPL
-#MPUDIR = ./lib/ap_imu_sensor/mpu9150
 IMUDIR = ./lib/ap_imu_sensor
 KALDIR = ./lib/kalman
+EKFDIR = ./lib/efk_kalman
 MATRIXDIR = ./lib/mesch12b
 MATHDIR = ./lib/ap_math
 AHRSDIR = ./lib/ap_ahrs
@@ -61,6 +61,7 @@ OBJS = $(SRCDIR)/communication.o \
        	$(IMUDIR)/imu.o \
        	$(KALDIR)/kalman.o \
        	$(KALDIR)/matrix_kalman.o \
+       	$(EKFDIR)/ekf.o \
        	$(GPSDIR)/ap_gps.o \
        	$(CONTROLDIR)/ap_control.o \
        	$(MATRIXDIR)/meschach.a \
@@ -72,11 +73,13 @@ OBJS = $(SRCDIR)/communication.o \
        	$(CAMDIR)/SsbSipMfcEncAPI.o \
        	$(ULRDIR)/ap_ultrasonic.o\
 		$(MEMDIR)/memwatch.o \
+		$(AHRSDIR)/ap_ahrs.o \
+		$(AHRSDIR)/MahonyAHRS.o
 		#$(ORTPDIR)/lib/libortp.so
        	#$(FENCEDIR)/lib/libefence.a
        	#ap_ahrs.o \
-#change to -lpthread is incorrect -lrt  -lortp
-LIBS = -pthread  -lm  -lrt -L $(FENCEDIR)/lib -L $(ORTPDIR)/lib  -lortp
+#change to -lpthread is incorrect -lrt
+LIBS = -pthread  -lm  -lrt -L $(FENCEDIR)/lib -L $(ORTPDIR)/lib -lortp
 
 
 INCS = -I $(MAVLINKDIR) -I $(MAVLINKDIR2) -I $(SRCDIR)  -I $(HALDIR) \
@@ -85,7 +88,7 @@ INCS = -I $(MAVLINKDIR) -I $(MAVLINKDIR2) -I $(SRCDIR)  -I $(HALDIR) \
 		-I $(NMEADIR)/include    -I $(GPSDIR) -I $(CONTROLDIR) \
 		-I $(CAMDIR)  -I $(ULRDIR) \
 		-I $(ORTPDIR)/include \
-		-I $(MEMDIR)
+		-I $(MEMDIR) -I $(EKFDIR)
 
 #NOTE:need root authority, file path can not obtain chinese character
 
@@ -124,3 +127,4 @@ clean:
 	cd $(MATRIXDIR) && make clean
 	cd $(NMEADIR) && make clean
 	cd $(FENCEDIR) && make clean
+	cd $(IMUDIR)/examples && make clean

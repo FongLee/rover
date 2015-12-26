@@ -15,6 +15,7 @@
 #include "rtpsend.h"
 #include "ap_ultrasonic.h"
 #include "scheduler.h"
+#include "ap_math.h"
 
 /**
  * transfer task
@@ -161,6 +162,9 @@ void *task_read_imu()
 					//print_fused_euler_angles(&mpu);
 					//fprintf(stdout, "read mpu9150 dmpTimestamp is %llu\n", (long long unsigned int)mpu.dmpTimestamp);
 					//fprintf(stdout, "read mpu9150 magTimestamp is %llu\n", (long long unsigned int)mpu.magTimestamp);
+					//fprintf(stdout, "\n");
+					//fprintf(stdout, "%f %f %f\n", mpu.fusedEuler[VEC3_X] * RAD_TO_DEG, mpu.fusedEuler[VEC3_Y] * RAD_TO_DEG, mpu.fusedEuler[VEC3_Z] * RAD_TO_DEG);
+					
 					send_imu_now  = true;
 				}
 			}

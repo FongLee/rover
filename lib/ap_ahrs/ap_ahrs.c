@@ -4,14 +4,11 @@
 #include "ap_math.h"
 #include "mpu9150.h"
 #include "quaternion.h"
+#include "MahonyAHRS.h"
 
-#define KP_AHRS 0.5
-#define DELT_T 0.02
-#define GRO_FACTOR 16.4
+#define GRO_FACTOR 16.38
 
 bool flag_ahrs_init = false;
-
-static float q0 = 1, q1 = 0, q2 = 0, q3 = 0;
 
 static int ahrs_init(mpudata_t *mpu);
 
@@ -43,76 +40,13 @@ int update_ahrs(mpudata_t *mpu)
 	// fprintf(stdout, "raw q2 is %f\n", q2);
 	// fprintf(stdout, "raw q3 is %f\n", q3);
 
-	static float vx, vy, vz;
-
-
-	tmp_norm = inv_sqrt(ax * ax + ay * ay + az * az);
-	ax *= tmp_norm;
-	ay *= tmp_norm;
-	az *= tmp_norm;
-
-	vx = 2 * q1 * q3 - 2 * q0 * q2;
-	vy = 2 * q2 * q3 + 2 * q0 * q1;
-	vz = 1 - 2 * q1 * q1 - 2 * q2 *q2;
-
-	static float hx, hy;
-	static float bx, bz;
-
-	tmp_norm = inv_sqrt(mx * mx + my * my + mz * mz);
-	mx *= tmp_norm;
-	my *= tmp_norm;
-	mz *= tmp_norm;
-
-	hx = mx * (1.0 -2.0*(q2 * q2 + q3 * q3)) + my * 2.0 * (q1 * q2 - q0 * q3) + mz * 2.0 * (q1 * q3 + q0 * q2);
-	hy = mx * 2.0 * (q1 * q2 + q0 * q3) + my * (1.0 - 2.0 * (q1 * q1 + q3 * q3)) + mz * 2.0* (q2 * q3 - q0 * q1);
-	bx = sqrt(hx * hx + hy * hy);
-	bz = mx * 2.0 * (q1 * q3 - q0 * q2) + my * 2.0 * (q2 * q3 + q0 * q1) + mz * (1.0 - 2.0 * (q1 * q1 + q2 * q2));
-
-	static float wx, wy, wz;
-	wx = bx * (1.0 - 2.0 * (q2 * q2 + q3 * q3)) + bz * 2.0 * (q1 * q3 - q0 * q2);
-	wy = bx * 2.0 * (q1 * q2 - q0 * q3) +  bz * 2.0 * (q2 * q3 + q0 * q1);
-	wz = bx * 2.0 * (q1 * q3 + q0 * q2) + bz * (1.0 - 2.0 * (q1 * q1 + q2 * q2));
-
-	tmp_norm = inv_sqrt(wx * wx + wy * wy + wz * wz);
-	wx *= tmp_norm;
-	wy *= tmp_norm;
-	wz *= tmp_norm;
-
-	static float error_x, error_y, error_z;
-	error_x = my * wz - mz * wy + ay * vz - az * vy;
-	error_y = mz * wx - mx * wz + az * vx - ax * vz;
-	error_z = mx * wy - my * wx + ax * vy - ay * vx;
-
 	static float gx, gy, gz;
 	gx = mpu->rawGyro[VEC3_X] / GRO_FACTOR * DEG_TO_RAD;
 	gy = mpu->rawGyro[VEC3_Y] / GRO_FACTOR * DEG_TO_RAD;
 	gz = mpu->rawGyro[VEC3_Z] / GRO_FACTOR * DEG_TO_RAD;
 
-	gx += error_x * KP_AHRS;
-	gy += error_y * KP_AHRS;
-	gz += error_z * KP_AHRS;
+	MahonyAHRSupdate(gx, gy, gz, ax, ay, az, mx, my, mz);
 
-	gx *= DELT_T * 0.5;
-	gy *= DELT_T * 0.5;
-	gz *= DELT_T * 0.5;
-
-	static float a, b, c, d;
-	a = q0;
-	b = q1;
-	c = q2;
-	d = q3;
-
-	q0 += -(b * gx + c * gy + d * gz);
-	q1 += a * gx -d * gy + c * gz;
-	q2 += d * gx + a * gy - b * gz;
-	q3 += -(c * gx - b * gy - a * gz);
-
-	tmp_norm = inv_sqrt(q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3);
-
-	q0 *= tmp_norm;
-	q1 *= tmp_norm;
-	q2 *= tmp_norm;
-	q3 *= tmp_norm;
 	mpu->fusedQuat[0] = q0;
 	mpu->fusedQuat[1] = q1;
 	mpu->fusedQuat[2] = q2;
@@ -125,6 +59,10 @@ int update_ahrs(mpudata_t *mpu)
 	// fprintf(stdout, "q3 is %f\n", q3);
 	quaternionToEuler(mpu->fusedQuat,mpu->fusedEuler);
 
+	//change to Front-Right-Down body coordinate system
+	mpu->fusedEuler[VEC3_Y] = -mpu->fusedEuler[VEC3_Y];
+	mpu->fusedEuler[VEC3_Z] = -mpu->fusedEuler[VEC3_Z];
+	
 	if (mpu->fusedEuler[VEC3_Z] < 0)
 	{
 		mpu->fusedEuler[VEC3_Z] += 2 * PI;
@@ -165,10 +103,11 @@ int ahrs_init(mpudata_t *mpu)
 	fprintf(stdout, "pitch is %f degree\n", init_Pitch* RAD_TO_DEG);
 	fprintf(stdout, "yaw is %f degree\n", init_Yaw* RAD_TO_DEG);
 #endif
+
 	q0 = cos(0.5*init_Roll)*cos(0.5*init_Pitch)*cos(0.5*init_Yaw) + sin(0.5*init_Roll)*sin(0.5*init_Pitch)*sin(0.5*init_Yaw);  //w
 	q1 = sin(0.5*init_Roll)*cos(0.5*init_Pitch)*cos(0.5*init_Yaw) - cos(0.5*init_Roll)*sin(0.5*init_Pitch)*sin(0.5*init_Yaw);  //x   绕x轴旋转是roll
 	q2 = cos(0.5*init_Roll)*sin(0.5*init_Pitch)*cos(0.5*init_Yaw) + sin(0.5*init_Roll)*cos(0.5*init_Pitch)*sin(0.5*init_Yaw);  //y   绕y轴旋转是pitch
-	q3 = cos(0.5*init_Roll)*cos(0.5*init_Pitch)*sin(0.5*init_Yaw) + sin(0.5*init_Roll)*sin(0.5*init_Pitch)*cos(0.5*init_Yaw);  //z   绕z轴旋转是Yaw
+	q3 = cos(0.5*init_Roll)*cos(0.5*init_Pitch)*sin(0.5*init_Yaw) - sin(0.5*init_Roll)*sin(0.5*init_Pitch)*cos(0.5*init_Yaw);  //z   绕z轴旋转是Yaw
 	//Yaw = init_Yaw * 57.3;
 
 	tmp_norm = inv_sqrt(q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3);

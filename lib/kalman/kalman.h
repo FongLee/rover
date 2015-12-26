@@ -47,7 +47,8 @@ typedef struct kalman
 	//measure_dimension * state_dimension
 	MAT * tmp_measure_state;
 	//state_dimension * state_dimension
-	MAT * tmp_state_state;
+	MAT * tmp1_state_state;
+	MAT * tmp2_state_state;
 } kalman_t;
 
 /**
@@ -66,6 +67,13 @@ kalman_t *alloc_kalman_filter(kalman_t **f, int state_dimension, int measure_dim
  * @return   [description]
  */
 int predict(kalman_t * f);
+
+/**
+ * prediction in the kalman filter, no update covariance
+ * @param  f kalman handler
+ * @return   0: success
+ */
+int predict_only(kalman_t *f);
 
 /**
  * update in kalman filter

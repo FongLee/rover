@@ -10,11 +10,11 @@
 
 /**
  * alloc a kalman_filter
- * @param  f                 [description]
- * @param  state_dimension   [description]
- * @param  measure_dimension [description]
- * @param  input_dimension   [description]
- * @return                   [description]
+ * @param  f                  kalmanm handle
+ * @param  state_dimension   n dimension state
+ * @param  measure_dimension m dimension measure data
+ * @param  input_dimension   
+ * @return                   >0: a pointer to kalman handle; NULL: err
  */
 kalman_t * alloc_kalman_filter(kalman_t **f, int state_dimension, int measure_dimension, int input_dimension)
 {
@@ -65,7 +65,8 @@ kalman_t * alloc_kalman_filter(kalman_t **f, int state_dimension, int measure_di
 	//measure_dimension * state_dimension
 	(*f)->tmp_measure_state = m_get(measure_dimension, state_dimension);
 	//state_dimension * state_dimension
-	(*f)->tmp_state_state = m_get(state_dimension, state_dimension);
+	(*f)->tmp1_state_state = m_get(state_dimension, state_dimension);
+	(*f)->tmp2_state_state = m_get(state_dimension, state_dimension);
 	
 	return *f;
 
@@ -96,14 +97,16 @@ void free_kalman_filter(kalman_t **f)
 	m_free((*f)->tmp2_state_dimension);
 	m_free((*f)->tmp_measure_dimension);
 	m_free((*f)->tmp_measure_state);
-	m_free((*f)->tmp_state_state);
+	m_free((*f)->tmp1_state_state);
+	m_free((*f)->tmp2_state_state);
+	
 	free(*f);
 }
 
 /**
  * prediction in the kalman filter
- * @param  f [description]
- * @return   [description]
+ * @param  f kalman handler
+ * @return   0: success
  */
 int predict(kalman_t *f)
 {
@@ -115,14 +118,35 @@ int predict(kalman_t *f)
 	m_mlt(f->control_input_model, f->control_input, f->tmp2_state_dimension);
 	//x(k|k-1) = tmp1 + tmp2
 	m_add(f->tmp1_state_dimension, f->tmp2_state_dimension, f->state_predict);
-
+	
 	//P(k|k-1) = A * P(k-1) * A^T + Q
 	//tmp1 = A * P(k-1)
-	m_mlt(f->state_transition, f->covariance_estimate, f->tmp1_state_dimension);
+	m_mlt(f->state_transition, f->covariance_estimate, f->tmp1_state_state);
 	//tmp2 = tmp1 * A^T
-	mmtr_mlt(f->tmp1_state_dimension, f->state_transition, f->tmp2_state_dimension);
+	mmtr_mlt(f->tmp1_state_state, f->state_transition, f->tmp2_state_state);
 	//P(k|k-1) = tmp2 + Q
-	m_add(f->tmp2_state_dimension, f->process_noise_covariance, f->covariance_predict); 
+	m_add(f->tmp2_state_state, f->process_noise_covariance, f->covariance_predict); 
+	return 0;
+}
+
+
+
+/**
+ * prediction in the kalman filter, no update covariance
+ * @param  f kalman handler
+ * @return   0: success
+ */
+int predict_only(kalman_t *f)
+{
+	//x(k|k-1) = A * x(k-1) + B * u(k-1)
+	
+	//tmp1 = A * x(k-1)
+	m_mlt(f->state_transition, f->state_estimate, f->tmp1_state_dimension);
+	//tmp2 = B * u(k-1)
+	m_mlt(f->control_input_model, f->control_input, f->tmp2_state_dimension);
+	//x(k|k-1) = tmp1 + tmp2
+	m_add(f->tmp1_state_dimension, f->tmp2_state_dimension, f->state_predict);
+	
 	return 0;
 }
 
@@ -152,9 +176,9 @@ int update(kalman_t *f)
 
 	//K(k) = P(k|k-1) * H^T * S(k)^-1
 	//tmp = P(k|k-1) * H^T
-	mmtr_mlt(f->covariance_predict, f->measure_model, f->tmp_state_state);
+	mmtr_mlt(f->covariance_predict, f->measure_model, f->tmp1_state_state);
 	//K(k) = tmp * S(k)^-1
-	m_mlt(f->tmp_state_state, f->inverse_innovation_covariance,f->k_gain);
+	m_mlt(f->tmp1_state_state, f->inverse_innovation_covariance,f->k_gain);
 
 	//x(k) = x(k|k-1) + K(k) * y(k)
 	//tmp = k(k) * y(k)
@@ -164,9 +188,9 @@ int update(kalman_t *f)
 
 	//P(k) = P(k|k-1) - K(k) * H * P(k|k-1)
 	//tmp = K(k) * H
-	m_mlt(f->k_gain, f->measure_model, f->tmp_state_state);
+	m_mlt(f->k_gain, f->measure_model, f->tmp1_state_state);
 	//P(k) = tmp * P(k|k-1)
-	m_mlt(f->tmp_state_state, f->covariance_predict, f->covariance_estimate);
+	m_mlt(f->tmp1_state_state, f->covariance_predict, f->covariance_estimate);
 	//P(k) = P(k|k-1) - P(k)
 	m_sub(f->covariance_predict, f->covariance_estimate, f->covariance_estimate);
 
