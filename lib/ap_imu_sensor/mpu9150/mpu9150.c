@@ -60,6 +60,7 @@
 #define Q_QUAT 		0.01
 #define R_ACCEL 	0.3
 #define R_MAG 		3.0
+#define Q_THEATA	0.001
 
 int kalman_init(void);
 static int data_ready();
@@ -74,6 +75,7 @@ int data_fusion_kalman(mpudata_t *mpu);
 int data_fusion_kalman_three(mpudata_t *mpu);
 int data_fusion_kalman_three_improve(mpudata_t *mpu);
 int data_fusion_ekf(mpudata_t *mpu);
+int data_fusion_ekf_seven(mpudata_t *mpu);
 
 
 int debug_on;
@@ -206,6 +208,38 @@ int ekf_init(void)
 	float deviation = 1000.0;
 	set_matrix(kalman_ekf->state_estimate,
 					0.0, 0.0, 0.0, 0.0);
+	//unit matrix
+	m_ident(kalman_ekf->covariance_estimate);
+	sm_mlt(deviation * deviation, kalman_ekf->covariance_estimate, kalman_ekf->covariance_estimate);
+
+	return 0;
+	
+}
+
+
+int ekf_seven_init(void)
+{
+	alloc_ekf_filter(&kalman_ekf, 7, 6, 3);
+	set_matrix(kalman_ekf->process_noise_covariance,
+				Q_QUAT, 0.0,	0.0,	0.0,	0.0,		0.0,		0.0,
+				0.0,	Q_QUAT, 0.0,	0.0,	0.0,		0.0,		0.0,
+				0.0,	0.0,	Q_QUAT, 0.0,	0.0,		0.0,		0.0,
+				0.0,	0.0,	0.0,	Q_QUAT,	0.0,		0.0,		0.0,
+				0.0,	0.0,	0.0,	0.0, 	Q_THEATA,	0.0,		0.0,
+				0.0,	0.0,	0.0,	0.0, 	0.0,		Q_THEATA,	0.0,
+				0.0,	0.0,	0.0,	0.0,	0.0,		0.0,		Q_THEATA);
+	sm_mlt(DELT_T, kalman_ekf->process_noise_covariance, kalman_ekf->process_noise_covariance);
+	set_matrix(kalman_ekf->measure_noise_covariance,
+				R_ACCEL,0.0,	0.0, 	0.0,	0.0,	0.0,
+				0.0,	R_ACCEL,0.0,	0.0,	0.0,	0.0,
+				0.0, 	0.0, 	R_ACCEL,0.0,	0.0,	0.0,
+				0.0,	0.0,	0.0,	R_MAG,	0.0,	0.0,
+				0.0,	0.0, 	0.0,	0.0, 	R_MAG, 	0.0,
+				0.0, 	0.0, 	0.0, 	0.0, 	0.0,	R_MAG);
+
+	float deviation = 1000.0;
+	set_matrix(kalman_ekf->state_estimate,
+					0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
 	//unit matrix
 	m_ident(kalman_ekf->covariance_estimate);
 	sm_mlt(deviation * deviation, kalman_ekf->covariance_estimate, kalman_ekf->covariance_estimate);
@@ -350,6 +384,8 @@ int mpu9150_init(int i2c_bus, int sample_rate, int mix_factor)
 	kalman_init();
 #elif 	EKF_APPLLY
 	ekf_init();
+#elif  	EKF_SEVEN_APPLLY
+	ekf_seven_init();
 #endif
 
 	printf(" done\n\n");
@@ -541,6 +577,8 @@ int mpu9150_read(mpudata_t *mpu)
 	data_fusion_ekf(mpu);
 #elif KALMAN_APPLLY
 	data_fusion_kalman(mpu);
+#elif EKF_SEVEN_APPLLY
+	data_fusion_ekf_seven(mpu);
 #else 
 	data_fusion(mpu);
 #endif
@@ -843,6 +881,7 @@ int data_fusion_kalman_three(mpudata_t *mpu)
 	{
 		mpu->fusedEuler[VEC3_Z] += 2 * PI;
 	}
+	//fprintf(stdout, "%f %f %f\n", mpu->fusedEuler[VEC3_X] * RAD_TO_DEG, mpu->fusedEuler[VEC3_Y] * RAD_TO_DEG, mpu->fusedEuler[VEC3_Z] * RAD_TO_DEG);
 	return 0;
 
 }
@@ -1022,7 +1061,7 @@ int data_fusion_ekf(mpudata_t *mpu)
 		last_gyro[VEC3_Z] = mpu->rawGyro[VEC3_Z] / GRO_FACTOR / 180 * PI;
 		set_matrix(kalman_ekf->state_transition,
 				1.0, 	-tmp_x,	-tmp_y,	-tmp_z,
-				tmp_x, 	1.0,	tmp_z, 	tmp_y,
+				tmp_x, 	1.0,	tmp_z, 	-tmp_y,
 				tmp_y, 	-tmp_z, 1.0, 	tmp_x,
 				tmp_z, 	tmp_y, 	-tmp_x, 1.0);
 
@@ -1034,7 +1073,7 @@ int data_fusion_ekf(mpudata_t *mpu)
 		sm_mlt(delt_t * 1e-3, kalman_ekf->process_noise_covariance, kalman_ekf->process_noise_covariance);
 
 		quat[QUAT_W] = quat[QUAT_W] - quat[QUAT_X] * tmp_x - quat[QUAT_Y] * tmp_y - quat[QUAT_Z] * tmp_z;
-		quat[QUAT_X] = quat[QUAT_X] + quat[QUAT_W] * tmp_x + quat[QUAT_Y] * tmp_z + quat[QUAT_Z] * tmp_y;
+		quat[QUAT_X] = quat[QUAT_X] + quat[QUAT_W] * tmp_x + quat[QUAT_Y] * tmp_z - quat[QUAT_Z] * tmp_y;
 		quat[QUAT_Y] = quat[QUAT_Y] + quat[QUAT_W] * tmp_y - quat[QUAT_X] * tmp_z + quat[QUAT_Z] * tmp_x;
 		quat[QUAT_Z] = quat[QUAT_Z] + quat[QUAT_W] * tmp_z + quat[QUAT_X] * tmp_y - quat[QUAT_Y] * tmp_x;
 		quaternionNormalize(quat);
@@ -1141,6 +1180,233 @@ int data_fusion_ekf(mpudata_t *mpu)
 		kalman_ekf->state_estimate->me[1][0] = quat[QUAT_X];
 		kalman_ekf->state_estimate->me[2][0] = quat[QUAT_Y];
 		kalman_ekf->state_estimate->me[3][0] = quat[QUAT_Z];
+		return -1;
+	}
+
+#ifdef KALMAN_DEBUG
+	fprintf(stdout, "\n");
+	fprintf(stdout, "measure is : \n");
+	m_output(kalman_ekf->measure);
+#endif
+
+	predict_ekf(kalman_ekf);
+
+	update_ekf(kalman_ekf);
+	
+#ifdef KALMAN_DEBUG
+	fprintf(stdout, "covariance_estimate is :\n");
+	m_output(kalman_ekf->covariance_estimate);
+#endif
+
+	quat[QUAT_W] = kalman_ekf->state_estimate->me[0][0];
+	quat[QUAT_X] = kalman_ekf->state_estimate->me[1][0];
+	quat[QUAT_Y] = kalman_ekf->state_estimate->me[2][0];
+	quat[QUAT_Z] = kalman_ekf->state_estimate->me[3][0];
+	quaternionToEuler(quat,mpu->fusedEuler);
+	mpu->fusedEuler[VEC3_Y] = -mpu->fusedEuler[VEC3_Y];
+	mpu->fusedEuler[VEC3_Z] = -mpu->fusedEuler[VEC3_Z];
+	//the range of mpu->fuseEuler is -PI to PI
+	if (mpu->fusedEuler[VEC3_Z] < 0)
+	{
+		mpu->fusedEuler[VEC3_Z] += 2 * PI;
+	}
+
+	//fprintf(stdout, "%f %f %f\n", mpu->fusedEuler[VEC3_X] * RAD_TO_DEG, mpu->fusedEuler[VEC3_Y] * RAD_TO_DEG, mpu->fusedEuler[VEC3_Z] * RAD_TO_DEG);
+	return 0;
+
+}
+
+
+
+
+/**
+ * ekf filter apply in data fusion to estimate euler, seven dimension
+ * @param  mpu
+ * @return     0:success
+ */
+int data_fusion_ekf_seven(mpudata_t *mpu)
+{
+
+	static vector3d_t measure_euler;
+	static float tmp_norm;
+	static double delt_t = 0.0;
+	static vector3d_t last_gyro;
+	static uint64_t last_kalman_time;
+	static bool kalman_time_init = false;
+	static quaternion_t quat;
+	static vector3d_t theata;
+	static vector3d_t last_theata;
+	static float tmp_x, tmp_y, tmp_z;
+	static float q0q0, q0q1, q0q2, q0q3, q1q1, q1q2, q1q3, q2q2, q2q3, q3q3;  
+	static float hx, hy, bx, bz;
+	static float ax, ay, az;
+	static float mx, my, mz;
+	static float wx, wy, wz;
+	static float vx, vy, vz;
+	static float q0, q1, q2, q3;
+	quat[QUAT_W] = kalman_ekf->state_estimate->me[0][0];
+	quat[QUAT_X] = kalman_ekf->state_estimate->me[1][0];
+	quat[QUAT_Y] = kalman_ekf->state_estimate->me[2][0];
+	quat[QUAT_Z] = kalman_ekf->state_estimate->me[3][0];
+	if (kalman_time_init)
+	{
+		delt_t = (double)(mpu->magTimestamp - last_kalman_time);
+		last_kalman_time = mpu->magTimestamp;
+		
+#ifdef KALMAN_DEBUG
+		fprintf(stdout, "delt_t is %f\n", delt_t * 1e-3);
+#endif
+		q0 = quat[QUAT_W];
+		q1 = quat[QUAT_X];
+		q2 = quat[QUAT_Y];
+		q3 = quat[QUAT_Z];
+		tmp_x = (last_gyro[VEC3_X] - last_theata[VEC3_X]) * delt_t * 1e-3 / 2.0;
+		tmp_y = (last_gyro[VEC3_Y] - last_theata[VEC3_Y]) * delt_t * 1e-3 / 2.0;
+		tmp_z = (last_gyro[VEC3_Z] - last_theata[VEC3_Z]) * delt_t * 1e-3 / 2.0;
+		last_gyro[VEC3_X] = mpu->rawGyro[VEC3_X] / GRO_FACTOR / 180 * PI;
+		last_gyro[VEC3_Y] = mpu->rawGyro[VEC3_Y] / GRO_FACTOR / 180 * PI;
+		last_gyro[VEC3_Z] = mpu->rawGyro[VEC3_Z] / GRO_FACTOR / 180 * PI;
+		last_theata[VEC3_X] = kalman_ekf->state_estimate->me[4][0];
+		last_theata[VEC3_Y] = kalman_ekf->state_estimate->me[5][0];
+		last_theata[VEC3_Z] = kalman_ekf->state_estimate->me[6][0];
+		set_matrix(kalman_ekf->state_transition,
+				1.0, 	-tmp_x,	-tmp_y,	-tmp_z, 0.5 * q1, 	0.5 * q2, 	0.5 * q3,
+				tmp_x, 	1.0,	tmp_z, 	-tmp_y, -0.5 * q0, 	0.5 * q3, 	-0.5 * q2,
+				tmp_y, 	-tmp_z, 1.0, 	tmp_x, 	-0.5 * q3, 	-0.5 * q0, 	0.5 * q1,
+				tmp_z, 	tmp_y, 	-tmp_x, 1.0,    0.5 * q2, 	-0.5 * q1, 	-0.5 * q0,
+				0.0,	0.0,	0.0,	0.0,	1.0,		0.0,		0.0,
+				0.0,	0.0,	0.0,	0.0,	0.0,		1.0,		0.0,
+				0.0,	0.0,	0.0,	0.0,	0.0,		0.0,		1.0);
+
+		set_matrix(kalman_ekf->process_noise_covariance,
+					Q_QUAT,	0.0,	0.0,	0.0,	0.0,		0.0,		0.0,
+					0.0,	Q_QUAT, 0.0,	0.0,	0.0,		0.0,		0.0,
+					0.0,	0.0,	Q_QUAT,	0.0,	0.0,		0.0,		0.0,
+					0.0,	0.0,	0.0,	Q_QUAT,	0.0,		0.0,		0.0,
+					0.0,	0.0,	0.0,	0.0,	Q_THEATA,	0.0,		0.0,
+					0.0,	0.0,	0.0,	0.0,	0.0,		Q_THEATA,	0.0,
+					0.0,	0.0,	0.0,	0.0,	0.0,		0.0,		Q_THEATA);
+		sm_mlt(delt_t * 1e-3, kalman_ekf->process_noise_covariance, kalman_ekf->process_noise_covariance);
+
+		quat[QUAT_W] = quat[QUAT_W] - quat[QUAT_X] * tmp_x - quat[QUAT_Y] * tmp_y - quat[QUAT_Z] * tmp_z;
+		quat[QUAT_X] = quat[QUAT_X] + quat[QUAT_W] * tmp_x + quat[QUAT_Y] * tmp_z - quat[QUAT_Z] * tmp_y;
+		quat[QUAT_Y] = quat[QUAT_Y] + quat[QUAT_W] * tmp_y - quat[QUAT_X] * tmp_z + quat[QUAT_Z] * tmp_x;
+		quat[QUAT_Z] = quat[QUAT_Z] + quat[QUAT_W] * tmp_z + quat[QUAT_X] * tmp_y - quat[QUAT_Y] * tmp_x;
+		quaternionNormalize(quat);
+		set_matrix(kalman_ekf->state_predict, 
+					quat[QUAT_W], quat[QUAT_X], quat[QUAT_Y], quat[QUAT_Z], 
+					last_theata[VEC3_X], last_theata[VEC3_Y], last_theata[VEC3_Z]);
+
+		q0 = quat[QUAT_W];
+		q1 = quat[QUAT_X];
+		q2 = quat[QUAT_Y];
+		q3 = quat[QUAT_Z];
+	
+
+#ifdef 	KALMAN_DEBUG
+		quaternionToEuler(quat, measure_euler);
+		fprintf(stdout, "predict euler, x : %f, y : %f, z : %f\n", measure_euler[VEC3_X] * RAD_TO_DEG, measure_euler[VEC3_Y] * RAD_TO_DEG, measure_euler[VEC3_Z] * RAD_TO_DEG); 
+#endif	
+		// Normalise accelerometer measurement
+		ax = mpu->calibratedAccel[VEC3_X];
+		ay = mpu->calibratedAccel[VEC3_Y];
+		az = mpu->calibratedAccel[VEC3_Z];
+		tmp_norm = inv_sqrt(ax * ax + ay * ay + az * az);
+		ax *= tmp_norm;
+		ay *= tmp_norm;
+		az *= tmp_norm;     
+
+		// Normalise magnetometer measurement
+		mx = mpu->calibratedMag[VEC3_X];
+		my = mpu->calibratedMag[VEC3_Y];
+		mz = mpu->calibratedMag[VEC3_Z];
+		tmp_norm = inv_sqrt(mx * mx + my * my + mz * mz);
+		mx *= tmp_norm;
+		my *= tmp_norm;
+		mz *= tmp_norm; 
+		set_matrix(kalman_ekf->measure,
+					ax, ay, az, mx, my, mz);
+		
+
+
+		// Auxiliary variables to avoid repeated arithmetic
+        q0q0 = q0 * q0;
+        q0q1 = q0 * q1;
+        q0q2 = q0 * q2;
+        q0q3 = q0 * q3;
+        q1q1 = q1 * q1;
+        q1q2 = q1 * q2;
+        q1q3 = q1 * q3;
+        q2q2 = q2 * q2;
+        q2q3 = q2 * q3;
+        q3q3 = q3 * q3; 
+
+        // Reference direction of Earth's magnetic field
+        hx = 2.0f * (mx * (0.5f - q2q2 - q3q3) + my * (q1q2 - q0q3) + mz * (q1q3 + q0q2));
+        hy = 2.0f * (mx * (q1q2 + q0q3) + my * (0.5f - q1q1 - q3q3) + mz * (q2q3 - q0q1));
+        bx = sqrt(hx * hx + hy * hy);
+        bz = 2.0f * (mx * (q1q3 - q0q2) + my * (q2q3 + q0q1) + mz * (0.5f - q1q1 - q2q2));
+
+		vx = 2 * (q1q3 - q0q2);
+		vy = 2 * (q0q1 + q2q3);
+		vz = 2 * (q0q0 - 0.5f + q3q3);
+		wx = 2 * (bx * (0.5f - q2q2 - q3q3) + bz * (q1q3 - q0q2));
+        wy = 2 * (bx * (q1q2 - q0q3) + bz * (q0q1 + q2q3));
+        wz = 2 * (bx * (q0q2 + q1q3) + bz * (0.5f - q1q1 - q2q2)); 
+		set_matrix(kalman_ekf->tmp_measure_dimension, 
+					vx, vy, vz, wx, wy, wz);
+		set_matrix(kalman_ekf->measure_model, 
+					-2 * q2, 					2 * q3, 				-2 * q0, 					2 * q1,						0.0, 0.0, 0.0,
+					2 * q1, 					2 * q0, 				2 * q3,						2 * q2,						0.0, 0.0, 0.0,
+					2 * q0, 					-2 * q1, 				-2 * q2, 					2 * q3, 					0.0, 0.0, 0.0,
+					2 * (q0 * bx - q2 * bz), 	2 * (q1 * bx + q3 * bz), 2 * (-q2 * bx - q0 * bz), 	2 * (-q3 * bx + q1 * bz),	0.0, 0.0, 0.0,
+					2 * (-q3 * bx + q1 * bz), 	2 * (q2 * bx + q0 * bz), 2 * (q1 * bx + q3 * bz), 	2 * (-q0 * bx + q2 * bz),	0.0, 0.0, 0.0,
+					2 * (q2 * bx + q0 * bz), 	2 * (q3 * bx - q1 * bz), 2 * (q0 * bx - q2 * bz), 	2 * (q1 * bx + q3 * bz),	0.0, 0.0, 0.0);
+
+	}
+	else
+	{
+
+
+		tmp_norm = inv_sqrt(mpu->calibratedAccel[VEC3_X] * mpu->calibratedAccel[VEC3_X]
+								+ mpu->calibratedAccel[VEC3_Y] * mpu->calibratedAccel[VEC3_Y]
+								+ mpu->calibratedAccel[VEC3_Z] * mpu->calibratedAccel[VEC3_Z]);
+		//pitch
+		measure_euler[VEC3_Y] = -asin(mpu->calibratedAccel[VEC3_X] * tmp_norm);
+		//roll
+		measure_euler[VEC3_X] = atan2(mpu->calibratedAccel[VEC3_Y], mpu->calibratedAccel[VEC3_Z]);
+		
+		static double hn_y, hn_x;
+		static double mag[3];
+		mag[VEC3_X] = mpu->calibratedMag[VEC3_X];
+		mag[VEC3_Y] = mpu->calibratedMag[VEC3_Y];
+		mag[VEC3_Z] = mpu->calibratedMag[VEC3_Z];
+		
+		hn_y = mag[VEC3_Y] * cos(measure_euler[VEC3_X]) - mag[VEC3_Z] * sin(measure_euler[VEC3_X]);
+		hn_x = mag[VEC3_X] * cos(measure_euler[VEC3_Y])
+					+ mag[VEC3_Y] * sin(measure_euler[VEC3_X]) * sin(measure_euler[VEC3_Y])
+					+ mag[VEC3_Z] * cos(measure_euler[VEC3_X]) * sin(measure_euler[VEC3_Y]);
+		measure_euler[VEC3_Z] = (double) atan2(-hn_y, hn_x);
+
+		last_kalman_time = mpu->magTimestamp;
+		kalman_time_init = true ;
+		last_gyro[VEC3_X] = mpu->rawGyro[VEC3_X] / GRO_FACTOR / 180 * PI;
+		last_gyro[VEC3_Y] = mpu->rawGyro[VEC3_Y] / GRO_FACTOR / 180 * PI;
+		last_gyro[VEC3_Z] = mpu->rawGyro[VEC3_Z] / GRO_FACTOR / 180 * PI;
+#ifdef 	KALMAN_DEBUG
+		fprintf(stdout, "initial alignment euler, x : %f, y : %f, z : %f\n", measure_euler[VEC3_X] * RAD_TO_DEG, measure_euler[VEC3_Y] * RAD_TO_DEG, measure_euler[VEC3_Z] * RAD_TO_DEG); 
+#endif
+		eulerToQuaternion(measure_euler, quat);
+		kalman_ekf->state_estimate->me[0][0] = quat[QUAT_W];
+		kalman_ekf->state_estimate->me[1][0] = quat[QUAT_X];
+		kalman_ekf->state_estimate->me[2][0] = quat[QUAT_Y];
+		kalman_ekf->state_estimate->me[3][0] = quat[QUAT_Z];
+		kalman_ekf->state_estimate->me[4][0] = 0.0;
+		kalman_ekf->state_estimate->me[5][0] = 0.0;
+		kalman_ekf->state_estimate->me[6][0] = 0.0;
+		last_theata[VEC3_X] = 0.0;
+		last_theata[VEC3_Y] = 0.0;
+		last_theata[VEC3_Z] = 0.0;
 		return -1;
 	}
 
