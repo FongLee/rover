@@ -386,6 +386,9 @@ int mpu9150_init(int i2c_bus, int sample_rate, int mix_factor)
 	ekf_init();
 #elif  	EKF_SEVEN_APPLLY
 	ekf_seven_init();
+#elif 	KF_EKF
+	kalman_init_three();
+	ekf_init();
 #endif
 
 	printf(" done\n\n");
@@ -579,6 +582,9 @@ int mpu9150_read(mpudata_t *mpu)
 	data_fusion_kalman(mpu);
 #elif EKF_SEVEN_APPLLY
 	data_fusion_ekf_seven(mpu);
+#elif KF_EKF
+	data_fusion_kalman_three(mpu);
+	data_fusion_ekf(mpu);
 #else 
 	data_fusion(mpu);
 #endif
@@ -851,6 +857,12 @@ int data_fusion_kalman_three(mpudata_t *mpu)
 		kalman_three_dim->state_estimate->me[2][0] = measure_euler[VEC3_Y];
 		kalman_three_dim->state_estimate->me[4][0] = measure_euler[VEC3_Z];
 		
+#ifdef 	KF_EKF
+		kalman_three_dim->state_estimate->me[0][0] = 0.0;
+		kalman_three_dim->state_estimate->me[2][0] = 0.0;
+		kalman_three_dim->state_estimate->me[4][0] = 0.0;
+#endif
+
 		return -1;
 	}
 
@@ -881,7 +893,7 @@ int data_fusion_kalman_three(mpudata_t *mpu)
 	{
 		mpu->fusedEuler[VEC3_Z] += 2 * PI;
 	}
-	//fprintf(stdout, "%f %f %f\n", mpu->fusedEuler[VEC3_X] * RAD_TO_DEG, mpu->fusedEuler[VEC3_Y] * RAD_TO_DEG, mpu->fusedEuler[VEC3_Z] * RAD_TO_DEG);
+	//fprintf(stdout, "%f %f %f ", mpu->fusedEuler[VEC3_X] * RAD_TO_DEG, mpu->fusedEuler[VEC3_Y] * RAD_TO_DEG, mpu->fusedEuler[VEC3_Z] * RAD_TO_DEG);
 	return 0;
 
 }
@@ -1180,6 +1192,14 @@ int data_fusion_ekf(mpudata_t *mpu)
 		kalman_ekf->state_estimate->me[1][0] = quat[QUAT_X];
 		kalman_ekf->state_estimate->me[2][0] = quat[QUAT_Y];
 		kalman_ekf->state_estimate->me[3][0] = quat[QUAT_Z];
+
+#ifdef KF_EKF
+	kalman_ekf->state_estimate->me[0][0] = 1.0;
+	kalman_ekf->state_estimate->me[1][0] = 0.0;
+	kalman_ekf->state_estimate->me[2][0] = 0.0;
+	kalman_ekf->state_estimate->me[3][0] = 0.0;
+#endif
+
 		return -1;
 	}
 
