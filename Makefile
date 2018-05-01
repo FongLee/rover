@@ -5,20 +5,28 @@
 
 all:  rover
 
+BIN = rover
 
 CC = arm-linux-gcc
+AR = arm-linux-ar
+
+# CC = gcc
+# AR = ar
+
 #-pg
-CFLAGS = -Wall -std=gnu99 -c -g
+CFLAGS = -Wall -std=gnu99 -c -g -lpthread
 #-pg -lefence -g -static
-LDFLAGS = -g
+LDFLAGS =
 
 
 #add  -DGPS_DEBUG -DUDP_DEBUG -DCOMMU_DEBUG -DMPU9150_DEBUG_ERROR
-#-DI2C_DEBUG -DMPU9150_DEBUG  -DKALMAN_DEBUG  -DAHRS_DEBUG  -DMEMWATCH
+#-DI2C_DEBUG -DMPU9150_DEBUG  -DKALMAN_DEBUG  -DAHRS_DEBUG  -DMEMWATCH2
 #-DMEMWATCH_STDIO -DULTRA_DEBUG  -DTCP_DEBUG -DCONTROL_DEBUG  -DSIG_DEBUG  for debugging
 #add -DTCP -DUDP for using tcp or udp
 # add -DAHRS_APPLLY -DKALMAN_THREE_APPLLY -DKALMAN_APPLLY -DEKF_APPLLY -DEKF_SEVEN_APPLLY -DKF_EKF
-DEFS = -DEMPL_TARGET_LINUX -DMPU9150 -DAK8975_SECONDARY -DUDP -DEKF_APPLLY
+#add -DGPS_ONLY for only using GPS in task
+#add -DNAVIGATION for use navigation
+DEFS = -DEMPL_TARGET_LINUX -DMPU9150 -DAK8975_SECONDARY -DUDP -DEKF_APPLLY -DCOMMU_DEBUG
 
 INSTALL_PATH = ./install
 SRCDIR = ./src
@@ -39,6 +47,7 @@ MEMDIR= ./lib/memwatch
 FENCEDIR = ./lib/electric_fence
 ULRDIR=./lib/ap_ultrasonic
 ORTPDIR=./lib/ortp
+NAVDIR = ./lib/ap_navigation
 
 OBJS = $(SRCDIR)/communication.o \
 		$(SRCDIR)/settings.o \
@@ -64,7 +73,6 @@ OBJS = $(SRCDIR)/communication.o \
        	$(EKFDIR)/ekf.o \
        	$(GPSDIR)/ap_gps.o \
        	$(CONTROLDIR)/ap_control.o \
-       	$(MATRIXDIR)/meschach.a \
        	$(NMEADIR)/lib/libnmea.a \
        	$(CAMDIR)/capture.o \
        	$(CAMDIR)/Encoder.o \
@@ -72,15 +80,16 @@ OBJS = $(SRCDIR)/communication.o \
        	$(CAMDIR)/SsbSipMfcDecAPI.o \
        	$(CAMDIR)/SsbSipMfcEncAPI.o \
        	$(ULRDIR)/ap_ultrasonic.o\
-		$(MEMDIR)/memwatch.o \
 		$(AHRSDIR)/ap_ahrs.o \
-		$(AHRSDIR)/MahonyAHRS.o
+		$(AHRSDIR)/MahonyAHRS.o \
+		$(NAVDIR)/ap_navigation.o \
+		$(MATRIXDIR)/meschach.a \
+		$(MEMDIR)/memwatch.o
 		#$(ORTPDIR)/lib/libortp.so
        	#$(FENCEDIR)/lib/libefence.a
        	#ap_ahrs.o \
 #change to -lpthread is incorrect -lrt
-LIBS = -pthread  -lm  -lrt -L $(FENCEDIR)/lib -L $(ORTPDIR)/lib -lortp
-
+LIBS =  -pthread -lm  -lrt -L $(FENCEDIR)/lib -L $(ORTPDIR)/lib -lortp
 
 INCS = -I $(MAVLINKDIR) -I $(MAVLINKDIR2) -I $(SRCDIR)  -I $(HALDIR) \
 		-I $(IMUDIR)/eMPL -I $(IMUDIR)/mpu9150 -I $(IMUDIR) -I $(KALDIR) \
@@ -88,7 +97,7 @@ INCS = -I $(MAVLINKDIR) -I $(MAVLINKDIR2) -I $(SRCDIR)  -I $(HALDIR) \
 		-I $(NMEADIR)/include    -I $(GPSDIR) -I $(CONTROLDIR) \
 		-I $(CAMDIR)  -I $(ULRDIR) \
 		-I $(ORTPDIR)/include \
-		-I $(MEMDIR) -I $(EKFDIR)
+		-I $(MEMDIR) -I $(EKFDIR) -I $(NAVDIR)
 
 #NOTE:need root authority, file path can not obtain chinese character
 
@@ -105,25 +114,25 @@ ortp:
 	make && make install
 
 rover: $(OBJS)
-	$(CC) $(INCS) $^    $(LDFLAGS) $(LIBS)  -o $@
+	$(CC) $(INCS)   $^ $(LIBS) $(LDFLAGS)   -o $@
 	#$(CC) $(INCS) $^    -lefence   $(LIBS)  -o $@
 
 %.o: %.c
 	$(CC) $(CFLAGS) $(INCS) $(DEFS) $< -o $@
 
 $(MATRIXDIR)/meschach.a:
-	cd $(MATRIXDIR) && make CC=arm-linux-gcc CFLAGS='-O -g'
+	cd $(MATRIXDIR) && make CC=$(CC) CFLAGS='-O -g'
 
 $(NMEADIR)/lib/libnmea.a:
-	cd $(NMEADIR) && make CC=arm-linux-gcc CFLAGS=-g
+	cd $(NMEADIR) && make CC=$(CC) CFLAGS=-g
 
 $(FENCEDIR)/lib/libefence.a:
-	cd $(FENCEDIR) && make  LIB_INSTALL_DIR=./lib MAN_INSTALL_DIR=./man  CC=arm-linux-gcc AR=arm-linux-ar install
+	cd $(FENCEDIR) && make  LIB_INSTALL_DIR=./lib MAN_INSTALL_DIR=./man  CC=$(CC) AR=arm-linux-ar install
 
 install: rover
 	mv rover $(INSTALL_PATH)
 clean:
-	rm -f $(OBJS)
+	rm -f $(OBJS) $(BIN)
 	cd $(MATRIXDIR) && make clean
 	cd $(NMEADIR) && make clean
 	cd $(FENCEDIR) && make clean

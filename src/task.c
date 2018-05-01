@@ -16,6 +16,8 @@
 #include "ap_ultrasonic.h"
 #include "scheduler.h"
 #include "ap_math.h"
+#include "ap_navigation.h"
+
 
 /**
  * transfer task
@@ -164,7 +166,11 @@ void *task_read_imu()
 					//fprintf(stdout, "read mpu9150 magTimestamp is %llu\n", (long long unsigned int)mpu.magTimestamp);
 					//fprintf(stdout, "\n");
 					//fprintf(stdout, "%f %f %f\n", mpu.fusedEuler[VEC3_X] * RAD_TO_DEG, mpu.fusedEuler[VEC3_Y] * RAD_TO_DEG, mpu.fusedEuler[VEC3_Z] * RAD_TO_DEG);
-					
+
+#ifdef USE_NAVIGATION				
+					inertial_navigation(&nav_data, &mpu, &gps_data, USE_MPU);
+#endif
+
 					send_imu_now  = true;
 				}
 			}
@@ -192,7 +198,7 @@ void *task_read_lowsensor()
 	while(1)
 	{
 		delay_ms(50);
-		res = gps_parse();
+		res = gps_parse(&gps_data);
 		if (res == 0)
 		{
 			send_gps_now = true;
@@ -242,8 +248,21 @@ void *task_read_gps()
 		if (read_gps_now)
 		{
 			read_gps_now = false;
-			gps_parse();
-			send_gps_now = true;
+			gps_parse(&gps_data);
+			if(gps_data.flag_gps_glitching == false)
+			{
+				
+#ifdef 	GPS_DEBUG
+				fprintf(stdout, "get gps\n");
+#endif
+				
+#ifdef USE_NAVIGATION
+				inertial_navigation(&nav_data, &mpu, &gps_data, USE_GPS);				
+#endif	
+
+				send_gps_now = true;
+			}
+			
 
 		}
 	}

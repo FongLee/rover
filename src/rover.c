@@ -17,6 +17,8 @@
 #include "ap_ultrasonic.h"
 #include "rtpsend.h"
 #include "tcp_driver.h"
+#include "ap_navigation.h"
+
 #ifdef MEMWATCH
 #include "memwatch.h"
 #endif
@@ -67,7 +69,8 @@ int  rover_init()
 	scheduler_begin(timer_update);
 	global_data_reset_param_defaults();
 	register_sig_handler();
-
+	navigation_init(&nav_data);
+	
 	return 0;
 
 }
@@ -128,10 +131,21 @@ int main(int argc, char **argv)
 			fprintf(stderr, "task:read imu failed:%s\n", strerror(errno));
 		}
 	}
-
-	if (gps_init() == 0 && ultrasonic_init()==0)
+	
+#ifdef GPS_ONLY
+	if (gps_init(&gps_data) == 0)
 	{
-		flag_gps_init = true;
+		gps_data.flag_gps_init = true;
+		res = pthread_create(&read_lowsensor_thread, NULL, task_read_gps, 0);
+		if (res != 0)
+		{
+			fprintf(stderr, "task:read_lowsensor failed:%s\n", strerror(errno));
+		}
+	}
+#else
+	if (gps_init(&gps_data) == 0 && ultrasonic_init()==0)
+	{
+		gps_data.flag_gps_init = true;
 		flag_control_init = true;
 		res = pthread_create(&read_lowsensor_thread, NULL, task_read_lowsensor, 0);
 		if (res != 0)
@@ -139,6 +153,7 @@ int main(int argc, char **argv)
 			fprintf(stderr, "task:read_lowsensor failed:%s\n", strerror(errno));
 		}
 	}
+#endif
 
 	if (control_init() == 0)
 	{

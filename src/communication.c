@@ -15,7 +15,8 @@
 #include "ap_control.h"
 #include "my_timer.h"
 #include "tcp_driver.h"
-
+#include "nmea/nmea.h"
+#include "ap_navigation.h"
 
 mavlink_system_t mavlink_system;
 
@@ -117,12 +118,24 @@ void communication_imu_send()
 void communication_gps_send()
 {
 
-	// mavlink_msg_gps_raw_int_send(MAVLINK_COMM_0, gps_timestamp* 1000, info.fix, info.lat*100000, info.lon*100000, info.elv * 1000,
-	// 								info.HDOP * 100, info.VDOP * 100, info.speed / 3.6 * 100, info.direction * 100, info.satinfo.inview);
 
-	mavlink_msg_gps_raw_int_send(MAVLINK_COMM_0, gps_timestamp* 1000, info.fix, gps_loc.lat, gps_loc.lng, gps_loc.alt * 10,
-									info.HDOP * 100, info.VDOP * 100, info.speed / 3.6 * 100, info.direction * 100, info.satinfo.inview);
+#ifdef USE_NAVIGATION
+	if(nav_data.flag_get_home == false)
+	{	
+		mavlink_msg_gps_raw_int_send(MAVLINK_COMM_0, gps_data.gps_timestamp* 1000, gps_data.info.fix, nmea_radian2degree(gps_data.position.lat) * 1e7, nmea_radian2degree(gps_data.position.lon) * 1e7, gps_data.info.elv * 1e3,
+											gps_data.info.HDOP * 100, gps_data.info.VDOP * 100, gps_data.info.speed / 3.6 * 100, gps_data.info.direction * 100, gps_data.info.satinfo.inview);
+	}
+	else
+	{
+		mavlink_msg_gps_raw_int_send(MAVLINK_COMM_0, gps_data.gps_timestamp* 1000, gps_data.info.fix, nmea_radian2degree(nav_data.kalman_navigation->state_estimate->me[0][0]) * 1e7, nmea_radian2degree(nav_data.kalman_navigation->state_estimate->me[1][0]) * 1e7, gps_data.info.elv * 1e3,
+											gps_data.info.HDOP * 100, gps_data.info.VDOP * 100, nav_data.speed * 100, gps_data.info.direction * 100, gps_data.info.satinfo.inview);
+	}
+#else
+	mavlink_msg_gps_raw_int_send(MAVLINK_COMM_0, gps_data.gps_timestamp* 1000, gps_data.info.fix, nmea_radian2degree(gps_data.position.lat) * 1e7, nmea_radian2degree(gps_data.position.lon) * 1e7, gps_data.info.elv * 1e3,
+										gps_data.info.HDOP * 100, gps_data.info.VDOP * 100, gps_data.info.speed / 3.6 * 100, gps_data.info.direction * 100, gps_data.info.satinfo.inview);
+#endif
 
+	
 }
 
 /**

@@ -1222,6 +1222,10 @@ int data_fusion_ekf(mpudata_t *mpu)
 	quat[QUAT_X] = kalman_ekf->state_estimate->me[1][0];
 	quat[QUAT_Y] = kalman_ekf->state_estimate->me[2][0];
 	quat[QUAT_Z] = kalman_ekf->state_estimate->me[3][0];
+	mpu->fusedQuat[0] = quat[QUAT_W];
+	mpu->fusedQuat[1] = quat[QUAT_X];
+	mpu->fusedQuat[2] = quat[QUAT_Y];
+	mpu->fusedQuat[3] = quat[QUAT_Z];
 	quaternionToEuler(quat,mpu->fusedEuler);
 	mpu->fusedEuler[VEC3_Y] = -mpu->fusedEuler[VEC3_Y];
 	mpu->fusedEuler[VEC3_Z] = -mpu->fusedEuler[VEC3_Z];

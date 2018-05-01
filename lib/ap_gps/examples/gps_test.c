@@ -9,38 +9,24 @@
 int main()
 {
 	scheduler_init();
-	struct location cur;
 	uint64_t timer = 0;
 	get_ms(&timer);
 	fprintf(stdout, "\ntime stamp is :%lu \n", (unsigned long)timer);
-	gps_init();
+	gps_init(&gps_data);
 	while(1)
 	{
-		gps_parse();
-		//ground_location(&cur);
-		check_position();
-		fprintf(stdout, "last good update is  :%lu ms\n", last_good_update);
-		delay_ms(100);
-		fprintf(stdout, "gps_quality is :%d \n", gps_quality());
-		fprintf(stdout, "Operating mode is :%d \n", gps_op_mode());
-		//fprintf(stdout,"\ntime:%d,%d,%d,%d,%d,%d\n", beiJingTime.year+1900, beiJingTime.mon+1,beiJingTime.day,beiJingTime.hour,beiJingTime.min,beiJingTime.sec);
-        //fprintf(stdout, "\nlatitude:%f,longitude:%f\n",info.lat,info.lon);
-        fprintf(stdout, "latitude:%ld,longitude:%ld\n",gps_loc.lat,gps_loc.lng);
-        //fprintf(stdout, "\nthe satellite being used:%d,the visible satellite:%d\n",info.satinfo.inuse,info.satinfo.inview);
-        fprintf(stdout, "the satellite being used:%d\n",num_sats());
-        //fprintf(stdout, "\naltitude:%f m\n", info.elv);
-        fprintf(stdout, "altitude:%ld cm\n", gps_loc.alt);
-        //fprintf(stdout, "\nspeed:%f km/h\n", info.speed);
-        fprintf(stdout, "speed:%f m/s\n", ground_speed());
-        fprintf(stdout, "speed:%ld cm/s\n", ground_speed_cm());
-        //fprintf(stdout, "\ndirection:%f degree\n", ground_speed());
-        fprintf(stdout, "direction:%ld centidegrees\n", ground_course_cd());
-        get_ms(&timer);
-		fprintf(stdout, "time stamp is :%lums \n", (unsigned long)timer);
-		// get_us(&timer);
-		// fprintf(stdout, "\ntime stamp is :%luus \n", timer);
-		//fprintf(stdout, "\ndeclination:%f \n", info.declination);
+		gps_parse(&gps_data);
 
+		fprintf(stdout, "gps time stamp is  :%lu ms\n", (unsigned long)gps_data.gps_timestamp);
+		delay_ms(1000);
+		fprintf(stdout, "gps_quality is :%d \n", gps_quality(&gps_data));
+		fprintf(stdout, "Operating mode is :%d \n", gps_op_mode(&gps_data));
+        fprintf(stdout, "latitude:%f degree,longitude:%f degree\n",nmea_radian2degree(gps_data.position.lat),nmea_radian2degree(gps_data.position.lon));
+        fprintf(stdout, "the satellite being used:%d\n",num_sats(&gps_data));
+        fprintf(stdout, "altitude:%f m\n", gps_data.info.elv);
+        fprintf(stdout, "speed:%f m/s\n", ground_speed(&gps_data));
+        fprintf(stdout, "speed:%ld cm/s\n", ground_speed_cm(&gps_data));
+        fprintf(stdout, "direction:%ld centidegrees\n", ground_course_cd(&gps_data));
 
 	}
 }
