@@ -8,18 +8,18 @@ We want to make the system have the functions as follows:
 - With ability of autonomous navigation
 - Route planning
 
-###Getting the source
+### Getting the source
 You can either download the source using the “ZIP” button at the top of the github page, or you can make a clone using git:
 
 ```shell
 git@github.com:FongLee/rover.git
 ```
 
-###Prerequisites
-####Ubuntu Linux
+### Prerequisites
+#### Ubuntu Linux
 To build FriendlyARM-ROV,you'll first need to install cross compilation tool chain of arm, you can download it from [Friendlyarm Official Website](http://www.friendlyarm.net/downloads).
-####Building using make
-#####Calibrate nertial sensors 
+#### Building using make
+##### Calibrate nertial sensors 
 At first, nertial sensors (acceleration and magnetic sensor)should be calibrated, beacause there are different errors in different places.Especially, magnetic sensor has a large error, which  is easily influenced by metal.
 
 ```shell
@@ -38,7 +38,7 @@ make
 ./imcal -m
 
 ```
-#####Load driver 
+##### Load driver 
 It is a driver of PWM in board to driver electronic speed controller.
 
 ```shell
@@ -46,7 +46,7 @@ cd ./install
 insmod 210pwm.ko
 
 ```
-#####Compile the whole programe
+##### Compile the whole programe
 
 ```shell
 cd ./
@@ -54,7 +54,7 @@ make
 
 ```
 
-###Usage of programe
+### Usage of programe
 Before you run the whole system, calibration of electronic speed controller is necessary.Otherwise, The electronic speed controller don't know which pwm is high and low.
 
 ```shell
